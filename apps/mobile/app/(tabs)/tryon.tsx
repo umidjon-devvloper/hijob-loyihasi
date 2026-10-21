@@ -80,6 +80,11 @@ export default function TryOnScreen() {
   const storeId = useTryonOnboarding((s) => s.storeId);
   const bodyType = useTryonOnboarding((s) => s.bodyType);
   const heightCm = useTryonOnboarding((s) => s.heightCm);
+  // User selfie captured once at onboarding. Used as the overlay source
+  // on every mannequin while the server-side face-render queue is still
+  // cooking — gives the buyer an immediate, consistent "my face" look
+  // across all variants without waiting on facefusion.
+  const faceUri = useTryonOnboarding((s) => s.faceUri);
 
   useFocusEffect(
     useCallback(() => {
@@ -386,6 +391,13 @@ export default function TryOnScreen() {
                   resizeMode="cover"
                 />
               )}
+              {hero && !selectedVariantRenderUrl && faceUri && (
+                // Instant client-side face overlay: the buyer's selfie is
+                // circled over the mannequin's head position so every
+                // variant shows the SAME face until the server-side swap
+                // (facefusion) catches up and replaces this view entirely.
+                <FaceOverlay uri={faceUri} size="hero" />
+              )}
               {lighting.overlay && (
                 <View
                   pointerEvents="none"
@@ -542,6 +554,10 @@ export default function TryOnScreen() {
                 bodyType={bodyType}
                 heightCm={heightCm}
                 userRenderUrl={userUrl}
+                // Local face overlay only when the queue has not produced
+                // this product's render yet — otherwise the server image
+                // already carries the buyer's face.
+                faceUri={userUrl ? null : faceUri}
                 onPress={() => setSelectedId(p.id)}
                 onWish={() => wishMutation.mutate({ productId: p.id, on: !wished.has(p.id) })}
                 onCart={() => variant && cartMutation.mutate(variant.id)}
@@ -720,6 +736,7 @@ function ProductThumb({
   bodyType,
   heightCm,
   userRenderUrl,
+  faceUri,
   onPress,
   onWish,
   onCart,
@@ -731,6 +748,7 @@ function ProductThumb({
   bodyType: BodyType | null | undefined;
   heightCm: number | null | undefined;
   userRenderUrl: string | null;
+  faceUri: string | null;
   onPress: () => void;
   onWish: () => void;
   onCart: () => void;
@@ -776,6 +794,7 @@ function ProductThumb({
           resizeMode={matched ? 'cover' : 'contain'}
         />
       )}
+      {faceUri && <FaceOverlay uri={faceUri} size="thumb" />}
       <Pressable
         onPress={onWish}
         hitSlop={8}
@@ -815,5 +834,57 @@ function ProductThumb({
         <Ionicons name={added ? 'checkmark' : 'cart-outline'} size={16} color="#FFF" />
       </Pressable>
     </Pressable>
+  );
+}
+
+// Round, soft-edged selfie overlay anchored at the mannequin's head
+// position. Used as an immediate "same face everywhere" fallback until
+// the server-side facefusion render arrives for this variant. The outer
+// band spans the card width and centres the circle horizontally, so the
+// inset works whether the parent is a hero card or a 96pt thumbnail.
+function FaceOverlay({
+  uri,
+  size,
+}: {
+  uri: string;
+  size: 'hero' | 'thumb';
+}) {
+  const top = size === 'hero' ? '5%' : '6%';
+  const widthPct = size === 'hero' ? '22%' : '38%';
+  const borderWidth = size === 'hero' ? 2 : 1;
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+      }}
+    >
+      <View
+        style={{
+          width: widthPct,
+          aspectRatio: 1,
+          borderRadius: 9999,
+          overflow: 'hidden',
+          borderWidth,
+          borderColor: 'rgba(255,255,255,0.55)',
+          backgroundColor: '#000',
+          shadowColor: '#000',
+          shadowOpacity: 0.35,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 6,
+        }}
+      >
+        <Image
+          source={{ uri }}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
+        />
+      </View>
+    </View>
   );
 }
