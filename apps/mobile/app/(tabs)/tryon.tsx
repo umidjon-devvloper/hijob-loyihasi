@@ -367,19 +367,23 @@ export default function TryOnScreen() {
           ) : (
             <>
               {hero && (
-                // Model (scene render or plain photo) composited over the
-                // fitting-room backdrop so the boutique is always visible
-                // around the figure.
+                // Fill the card edge-to-edge. Transparent PNG renders show
+                // the fitting-room backdrop through the keyed-out areas;
+                // older baked-in scene JPEGs cover the backdrop entirely,
+                // so viewers never see a second rectangle on top of the
+                // first one.
                 <Image
                   source={{ uri: hero.uri }}
                   style={{
                     position: 'absolute',
-                    top: '4%',
-                    bottom: '8%',
-                    left: '6%',
-                    right: '6%',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: '100%',
+                    height: '100%',
                   }}
-                  resizeMode="contain"
+                  resizeMode="cover"
                 />
               )}
               {lighting.overlay && (

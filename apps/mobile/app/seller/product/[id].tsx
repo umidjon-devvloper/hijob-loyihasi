@@ -352,7 +352,15 @@ export default function SellerProductDetailScreen() {
                       >
                         <Image
                           source={{ uri: url }}
-                          style={{ width: '100%', aspectRatio: 3 / 4, backgroundColor: '#1b1b14' }}
+                          style={{
+                            width: '100%',
+                            aspectRatio: 3 / 4,
+                            // Cream card background so transparent PNGs
+                            // (new chroma-keyed variants) show the figure
+                            // directly on the card instead of a hard dark
+                            // rectangle inside it.
+                            backgroundColor: colors.surface2,
+                          }}
                           resizeMode="contain"
                         />
                         <View style={{ padding: 6 }}>
