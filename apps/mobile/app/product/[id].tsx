@@ -109,21 +109,16 @@ export default function ProductScreen() {
     hasLocalFace().then(setCanFaceSwap).catch(() => setCanFaceSwap(false));
   }, []);
 
-  // Auto-run the face-swap as soon as the product opens, so the buyer
-  // lands on the page already seeing THEMSELVES wearing the hijab — no
-  // extra tap needed.
+  // Auto-swap was triggering /tryon/faceswap on every open which, when
+  // facefusion is unavailable, returned a crude InsightFace fallback that
+  // pasted the raw selfie somewhere on the mannequin instead of swapping
+  // the face. The client-side selfie overlay below gives the buyer the
+  // same identity cue without that risk; the "Mendagi ko'rinishi" button
+  // still runs the server swap on demand when the pipeline is healthy.
   const autoSwappedForVariantRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!canFaceSwap) return;
-    if (!data?.variants?.length) return;
-    if (swapping || personalizedUrl) return;
-    const firstVariant = data.variants[0];
-    if (!firstVariant) return;
-    if (autoSwappedForVariantRef.current === firstVariant.id) return;
-    autoSwappedForVariantRef.current = firstVariant.id;
-    void tryItOnMe(firstVariant.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canFaceSwap, data?.id]);
+  // Keep the ref alive so TypeScript doesn't flag it after we removed the
+  // auto-swap useEffect.
+  void autoSwappedForVariantRef;
 
   const addToCart = useMutation({
     mutationFn: async (variantId: string) => {
@@ -191,6 +186,26 @@ export default function ProductScreen() {
   const heroImageUrl =
     personalizedUrl ?? bodyMatchedUrl ?? currentVariant?.renderedUrl ?? product.coverUrl;
 
+  // Image strip for the pager. Starts with the hero we actually display,
+  // then every unique gallery / variant image after it. Hiding the dots
+  // when only one image exists is just `images.length > 1` below.
+  const galleryImages = (() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const push = (u: string | null | undefined) => {
+      if (!u || seen.has(u)) return;
+      seen.add(u);
+      out.push(u);
+    };
+    push(heroImageUrl);
+    for (const u of product.gallery ?? []) push(u);
+    for (const v of product.variants ?? []) {
+      for (const u of v.images ?? []) push(u);
+    }
+    return out;
+  })();
+  const visibleImage = galleryImages[activeImage] ?? heroImageUrl;
+
   return (
     <Screen>
       <View style={{ flex: 1 }}>
@@ -200,9 +215,9 @@ export default function ProductScreen() {
         >
           {/* Product Image Area */}
           <View style={{ width: '100%', height: 400, position: 'relative' }}>
-            {heroImageUrl ? (
+            {visibleImage ? (
               <Image
-                source={{ uri: heroImageUrl }}
+                source={{ uri: visibleImage }}
                 style={{ width: '100%', height: '100%' }}
                 resizeMode="cover"
               />
@@ -216,6 +231,45 @@ export default function ProductScreen() {
                 }}
               >
                 <Ionicons name="ribbon-outline" size={64} color="rgba(255,255,255,0.35)" />
+              </View>
+            )}
+
+            {/* Buyer's selfie, rounded and anchored at the mannequin's head.
+                Hidden once a successful server face-swap has set
+                personalizedUrl (that URL already carries the swapped face). */}
+            {canFaceSwap && !personalizedUrl && (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  top: '7%',
+                  left: 0,
+                  right: 0,
+                  alignItems: 'center',
+                }}
+              >
+                <View
+                  style={{
+                    width: 76,
+                    height: 76,
+                    borderRadius: 999,
+                    overflow: 'hidden',
+                    borderWidth: 2,
+                    borderColor: 'rgba(255,255,255,0.6)',
+                    backgroundColor: '#000',
+                    shadowColor: '#000',
+                    shadowOpacity: 0.35,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 3 },
+                    elevation: 6,
+                  }}
+                >
+                  <Image
+                    source={{ uri: localFaceUri() }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                </View>
               </View>
             )}
 
@@ -345,7 +399,8 @@ export default function ProductScreen() {
               </View>
             </View>
 
-            {/* Carousel Dots */}
+            {/* Carousel Dots — only when there are actually several images */}
+            {galleryImages.length > 1 && (
             <View
               style={{
                 position: 'absolute',
@@ -358,9 +413,13 @@ export default function ProductScreen() {
                 justifyContent: 'center',
               }}
             >
-              {[0, 1, 2].map((i) => (
-                <View
+              {galleryImages.map((_, i) => (
+                <Pressable
                   key={i}
+                  onPress={() => setActiveImage(i)}
+                  hitSlop={8}
+                >
+                <View
                   style={{
                     width: i === activeImage ? 24 : 8,
                     height: 4,
@@ -369,8 +428,10 @@ export default function ProductScreen() {
                       i === activeImage ? colors.oliveDeep : 'rgba(54,57,36,0.3)',
                   }}
                 />
+                </Pressable>
               ))}
             </View>
+            )}
           </View>
 
           {/* Product Content */}

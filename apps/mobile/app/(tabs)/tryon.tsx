@@ -838,10 +838,9 @@ function ProductThumb({
 }
 
 // Round, soft-edged selfie overlay anchored at the mannequin's head
-// position. Used as an immediate "same face everywhere" fallback until
-// the server-side facefusion render arrives for this variant. The outer
-// band spans the card width and centres the circle horizontally, so the
-// inset works whether the parent is a hero card or a 96pt thumbnail.
+// position. Hero and thumbs are both laid out so the face sits around
+// 7% from the top of the mannequin's own bounding box — mannequins use
+// a shared 3×3 grid pose, so one coordinate works everywhere.
 function FaceOverlay({
   uri,
   size,
@@ -849,15 +848,16 @@ function FaceOverlay({
   uri: string;
   size: 'hero' | 'thumb';
 }) {
-  const top = size === 'hero' ? '5%' : '6%';
-  const widthPct = size === 'hero' ? '22%' : '38%';
-  const borderWidth = size === 'hero' ? 2 : 1;
+  const metrics =
+    size === 'hero'
+      ? { top: '7%' as const, dim: 80 }
+      : { top: '8%' as const, dim: 32 };
   return (
     <View
       pointerEvents="none"
       style={{
         position: 'absolute',
-        top,
+        top: metrics.top,
         left: 0,
         right: 0,
         alignItems: 'center',
@@ -865,12 +865,12 @@ function FaceOverlay({
     >
       <View
         style={{
-          width: widthPct,
-          aspectRatio: 1,
-          borderRadius: 9999,
+          width: metrics.dim,
+          height: metrics.dim,
+          borderRadius: metrics.dim / 2,
           overflow: 'hidden',
-          borderWidth,
-          borderColor: 'rgba(255,255,255,0.55)',
+          borderWidth: size === 'hero' ? 2 : 1,
+          borderColor: 'rgba(255,255,255,0.6)',
           backgroundColor: '#000',
           shadowColor: '#000',
           shadowOpacity: 0.35,
