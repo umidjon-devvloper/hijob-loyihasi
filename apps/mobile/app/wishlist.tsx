@@ -1,4 +1,4 @@
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -109,7 +109,11 @@ export default function WishlistScreen() {
                   }}
                 >
                   {item.product.coverUrl ? (
-                    <View style={{ width: '100%', height: '100%', backgroundColor: colors.rule }} />
+                    <Image
+                      source={{ uri: item.product.coverUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
                   ) : (
                     <Ionicons name="shirt-outline" size={28} color={colors.olive} />
                   )}

@@ -100,7 +100,9 @@ export default function SettingsScreen() {
 
   const supportItems: MenuItem[] = [
     { label: t.helpCenter, icon: 'help-circle-outline', iconColor: '#7A8A5B', iconBg: 'rgba(122,138,91,0.1)', route: '/settings/help' },
-    { label: t.contactUs, icon: 'chatbubble-ellipses-outline', iconColor: '#B85450', iconBg: 'rgba(184,84,80,0.08)', route: '/settings/contact' },
+    // "Biz bilan bog'laning" ekrani hozircha o'chirilgan — foydalanuvchi
+    // suport flow'ini qayta ko'rib chiqishni so'ragan. Ekran kodi joyida
+    // qoladi; menyuga qaytarish uchun shu qatorni yoqib qo'yish yetarli.
   ];
 
   return (

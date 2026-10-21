@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Alert, Image, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,14 @@ import { errorMessage, errorTitle } from '../../src/lib/api-errors';
 import { safeBack } from '../../src/lib/safe-back';
 
 type CategoryId = 'scarves' | 'dresses' | 'bags' | 'accessories';
+type SortKey = 'popularity' | 'price-asc' | 'price-desc' | 'rating';
+
+const SORT_LABELS: Record<SortKey, { uz: string; ru: string }> = {
+  popularity: { uz: "Ommaboplik bo'yicha", ru: 'По популярности' },
+  'price-asc': { uz: "Narx: arzondan qimmatga", ru: 'Цена: от низкой' },
+  'price-desc': { uz: "Narx: qimmatdan arzonga", ru: 'Цена: от высокой' },
+  rating: { uz: "Reyting bo'yicha", ru: 'По рейтингу' },
+};
 
 interface Product {
   id: string;
@@ -66,16 +74,44 @@ export default function CatalogScreen() {
   const [category, setCategory] = useState<CategoryId>(params.category ?? 'scarves');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>('popularity');
+  const [sortOpen, setSortOpen] = useState(false);
 
   const { data, isError } = useQuery({
-    queryKey: ['products', category, selectedColor],
+    queryKey: ['products', category, selectedColor, sortKey],
     queryFn: async () =>
       (await api.get('/catalog/products', {
-        params: { category, ...(selectedColor && { color: selectedColor }), pageSize: 20 },
+        params: {
+          category,
+          ...(selectedColor && { color: selectedColor }),
+          sort: sortKey,
+          pageSize: 20,
+        },
       })).data,
   });
 
-  const products: Product[] = data?.items ?? [];
+  const products: Product[] = (() => {
+    const items: Product[] = data?.items ?? [];
+    // Backend may not sort yet — apply a client-side pass so the user
+    // sees a reaction even against an older API build.
+    const copy = [...items];
+    switch (sortKey) {
+      case 'price-asc':
+        return copy.sort((a, b) => a.basePriceUsd - b.basePriceUsd);
+      case 'price-desc':
+        return copy.sort((a, b) => b.basePriceUsd - a.basePriceUsd);
+      case 'rating':
+        return copy.sort(
+          (a, b) => (b.seller?.rating ?? 0) - (a.seller?.rating ?? 0),
+        );
+      case 'popularity':
+      default:
+        return copy.sort(
+          (a, b) =>
+            (b.seller?.reviewsCount ?? 0) - (a.seller?.reviewsCount ?? 0),
+        );
+    }
+  })();
 
   // Wishlist toggle — the catalog card hearts share one mutation to avoid
   // one in-flight request per card and keep wishlist count queries in sync.
@@ -337,7 +373,8 @@ export default function CatalogScreen() {
             color={showFilters ? colors.goldSoft : colors.muted}
           />
         </Pressable>
-        <View
+        <Pressable
+          onPress={() => setSortOpen(true)}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -353,10 +390,10 @@ export default function CatalogScreen() {
         >
           <Ionicons name="swap-vertical-outline" size={14} color={colors.muted} />
           <Text variant="bodySmall" color="ink" style={{ flex: 1 }}>
-            {t('catalog.sort.popularity')}
+            {SORT_LABELS[sortKey][lang]}
           </Text>
           <Ionicons name="chevron-down" size={12} color={colors.muted} />
-        </View>
+        </Pressable>
       </View>
 
       {/* Filter Panel */}
@@ -451,7 +488,117 @@ export default function CatalogScreen() {
           }
         />
       </View>
+      <SortSheet
+        open={sortOpen}
+        current={sortKey}
+        onPick={(k) => {
+          setSortKey(k);
+          setSortOpen(false);
+        }}
+        onClose={() => setSortOpen(false)}
+        lang={lang}
+      />
     </Screen>
+  );
+}
+
+function SortSheet({
+  open,
+  current,
+  onPick,
+  onClose,
+  lang,
+}: {
+  open: boolean;
+  current: SortKey;
+  onPick: (k: SortKey) => void;
+  onClose: () => void;
+  lang: 'uz' | 'ru';
+}) {
+  const { colors, theme } = useTheme();
+  const keys: SortKey[] = ['popularity', 'price-asc', 'price-desc', 'rating'];
+  return (
+    <Modal
+      transparent
+      visible={open}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.35)',
+          justifyContent: 'flex-end',
+        }}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={{
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            paddingTop: 16,
+            paddingBottom: 32,
+          }}
+        >
+          <View
+            style={{
+              alignSelf: 'center',
+              width: 44,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: colors.rule,
+              marginBottom: 14,
+            }}
+          />
+          <Text
+            variant="body"
+            color="oliveDeep"
+            style={{
+              fontSize: 16,
+              fontWeight: '700',
+              paddingHorizontal: 20,
+              marginBottom: 10,
+              fontFamily: theme.fontFamilies.display,
+            }}
+          >
+            {lang === 'ru' ? 'Сортировка' : 'Saralash'}
+          </Text>
+          {keys.map((k) => {
+            const active = k === current;
+            return (
+              <Pressable
+                key={k}
+                onPress={() => onPick(k)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  backgroundColor: active ? `${colors.goldDark}14` : 'transparent',
+                }}
+              >
+                <Text
+                  variant="body"
+                  color="ink"
+                  style={{
+                    fontSize: 14,
+                    fontWeight: active ? '600' : '500',
+                  }}
+                >
+                  {SORT_LABELS[k][lang]}
+                </Text>
+                {active && (
+                  <Ionicons name="checkmark" size={18} color={colors.goldDark} />
+                )}
+              </Pressable>
+            );
+          })}
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
