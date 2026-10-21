@@ -202,23 +202,19 @@
       cells.push({ sizeKey: gridKeys[i], cell, box });
     }
 
-    // Fitting-room mode: needs the scene, a readable backdrop colour and a
-    // figure box in every cell; otherwise fall back to plain slices.
-    if (scene && bg && cells.every((c) => c.box)) {
-      const sceneUrl = URL.createObjectURL(
-        new Blob([Uint8Array.from(atob(scene.base64), (ch) => ch.charCodeAt(0))], { type: scene.mime }),
-      );
-      try {
-        const sceneImg = await loadImage(sceneUrl);
-        const figures = cells.map((c) => keyOut(c.cell, c.box, bg));
-        const tallest = Math.max(...figures.map((f) => f.height));
-        const scale = (TALLEST_H * SCENE_H) / tallest;
-        return cells.map((c, i) =>
-          canvasToSlice(c.sizeKey, placeOnScene(figures[i], sceneImg, scale), 'image/jpeg', 0.9),
-        );
-      } finally {
-        URL.revokeObjectURL(sceneUrl);
-      }
+    // Transparent-PNG mode: key the chroma backdrop out of every cell and
+    // upload each figure as a trimmed transparent PNG. Mobile and seller
+    // web composite it over their own fitting-room backdrop at display
+    // time, so the figure never carries a baked-in scene. The old scene
+    // argument is accepted for backwards compatibility but no longer used:
+    // compositing anything server-side forces viewers to accept that
+    // backdrop forever.
+    if (bg && cells.every((c) => c.box)) {
+      return cells.map((c) => {
+        const figure = keyOut(c.cell, c.box, bg);
+        const trimmed = trimTransparent(figure) ?? figure;
+        return canvasToSlice(c.sizeKey, trimmed, 'image/png');
+      });
     }
 
     return cells.map((c) => canvasToSlice(c.sizeKey, trimTransparent(c.cell) ?? c.cell, 'image/png'));

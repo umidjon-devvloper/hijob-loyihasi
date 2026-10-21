@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "N24:31 Dev AI panel",
   "description": "Pending style-job'larni ChatGPT'da avto bajarib natijani serverga qaytaradi (loop)",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "action": {
     "default_popup": "popup.html",
     "default_title": "N24:31 Dev AI",

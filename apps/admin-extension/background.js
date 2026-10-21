@@ -51,7 +51,7 @@ const BASE_GRID_PROMPT = [
   'OUTFIT:',
   '  • Fully MODEST: plain SOFT BEIGE / CREAM long-sleeve ankle-length dress (abaya-like simple gown in warm beige #e8dcc6 colour, NOT white) — long sleeves to the wrists, closed high neckline, hem reaching the ankles. No bare skin anywhere.',
   '  • Plain BEIGE closed flat shoes on the feet — NO bare feet.',
-  '  • The dress colour must be visibly DIFFERENT from the (transparent/white) background so the whole figure stays visible when the background is removed.',
+  '  • The dress colour must be clearly DIFFERENT from the chroma-key GREEN backdrop so clean cut-out keying is possible.',
   '  • NO hijab or head covering on the base mannequin (that is added separately per product).',
   '',
   'LAYOUT:',
@@ -59,9 +59,11 @@ const BASE_GRID_PROMPT = [
   '  • Front view, arms slightly away from body, hands relaxed.',
   '  • Equal horizontal gap between columns, equal vertical gap between rows.',
   '  • Each cell has the same canvas size (so a 3×3 grid cut is clean).',
-  '  • SOLID MATTE DARK BACKGROUND — fill the entire canvas with a solid flat dark colour #1b1b14 (very dark olive-brown, near-black). FULLY OPAQUE, no transparency, no alpha channel. Same solid colour behind every mannequin, no gradient, no texture, no shadow pattern on the floor.',
+  '  • BACKGROUND IS A FLAT UNIFORM CHROMA-KEY GREEN SCREEN — fill the entire canvas with pure saturated green #00B140 behind the figures and in every gap between the 9 cells. The green must be perfectly flat, no gradient, no shading, no vignette, no shadow on the floor, no reflections. This green is REMOVED after rendering to produce a transparent-background PNG — treat it exactly like a cyclorama/chroma backdrop in a studio.',
+  '  • NOTHING on the mannequin, dress, shoes or props may be green (no green accents, no green tint on skin, no green rim light). Green is reserved for keying only.',
+  '  • NO ground shadow and NO floor plane — the figures must appear to float on the flat green screen so the cut-out is clean around the feet.',
   '  • NO text, NO labels, NO rulers, NO watermarks drawn into the image.',
-  '  • Output ONE OPAQUE image (JPEG or PNG without alpha), 1:1 or 4:5 aspect ratio. Do NOT use transparency.',
+  '  • Output ONE opaque PNG (or JPEG), 1:1 or 4:5 aspect ratio. The transparent-background PNG is produced downstream by chroma-keying the green out.',
 ].join('\n');
 const PAUSE_MS = 8_000; // between tasks — don't trip rate limiting
 const IDLE_POLL_MS = 60_000; // when queue is empty
@@ -410,12 +412,13 @@ function buildPrompt(job) {
     '• The dress and shoes beneath remain fully visible — no bare skin exposed anywhere.',
     '',
     'Scene:',
-    '• Soft warm studio lighting on the figures (like a boutique fitting room), NO ground shadow and NO floor.',
-    `• BACKGROUND MUST BE A SOLID FLAT ${chroma.name} SCREEN — fill the entire canvas with ${chroma.hex}. FULLY OPAQUE, no transparency, no alpha channel. Same solid colour behind every model, no gradient, no texture, no vignette.`,
+    '• Soft warm studio lighting on the figures (like a boutique fitting room). NO ground shadow and NO floor plane — every figure must appear to float on the flat chroma backdrop so the cut-out is clean around the feet.',
+    `• BACKGROUND IS A FLAT UNIFORM ${chroma.name} CHROMA-KEY SCREEN — fill the entire canvas with ${chroma.hex} behind the figures and in every gap between the 9 cells. The chroma must be perfectly flat: no gradient, no shading, no vignette, no reflected tint on the figure, no shadow on the floor. This chroma is REMOVED after rendering to produce a transparent-background PNG that will be composed on the real fitting-room backdrop in the app.`,
+    `• Nothing on the model, dress, shoes or hijab may be ${chroma.name} — ${chroma.hex} is reserved for keying only (no accents, no tinted highlights, no rim-light of this colour).`,
     '• NO text, NO labels, NO rulers, NO panel borders, NO watermarks drawn into the image.',
     `• Equal empty ${chroma.hex} gaps between the 9 figures so a 3×3 crop lands cleanly without clipping any figure.`,
     '',
-    'Output ONE OPAQUE image (JPEG or PNG without alpha), square or 4:5 portrait, containing all 9 full-body models arranged in a clean 3×3 grid ready for mechanical cutting. Do NOT use transparency.',
+    'Output ONE opaque image (JPEG or PNG), square or 4:5 portrait, containing all 9 full-body models arranged in a clean 3×3 grid on the flat chroma backdrop ready for mechanical cutting and chroma-keying.',
   ].join('\n');
 }
 
