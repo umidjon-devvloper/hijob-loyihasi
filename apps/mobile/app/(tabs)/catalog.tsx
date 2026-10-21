@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '../../src/components/Screen';
 import { Text } from '../../src/components/Text';
 import { useTheme } from '../../src/theme/ThemeProvider';
@@ -31,6 +32,15 @@ const CATEGORY_ICONS: Record<CategoryId, string> = {
   bags: 'bag-handle-outline',
   accessories: 'diamond-outline',
 };
+
+// Hero cards for the category rail. Images were lifted from the website
+// (public/images/category-*.webp) so the two surfaces read as one brand.
+const CATEGORY_CARDS: Array<{ id: CategoryId; label: string; img: number }> = [
+  { id: 'scarves', label: "Ro'mollar", img: require('../../assets/categories/scarves.webp') },
+  { id: 'dresses', label: "Ko'ylaklar", img: require('../../assets/categories/dresses.webp') },
+  { id: 'bags', label: 'Sumkalar', img: require('../../assets/categories/bags.webp') },
+  { id: 'accessories', label: 'Aksessuarlar', img: require('../../assets/categories/accessories.webp') },
+];
 
 const COLORS: Array<{ key: string; hex: string }> = [
   { key: 'yellow', hex: '#F4D06F' },
@@ -206,44 +216,89 @@ export default function CatalogScreen() {
         </Text>
       </View>
 
-      {/* Category Tabs */}
+      {/* Category Rail — image cards (website parity) */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 14, gap: 10 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 16, gap: 12 }}
       >
-        {(['scarves', 'dresses', 'bags', 'accessories'] as CategoryId[]).map((c) => {
-          const active = c === category;
+        {CATEGORY_CARDS.map((c) => {
+          const active = c.id === category;
           return (
             <Pressable
-              key={c}
-              onPress={() => setCategory(c)}
+              key={c.id}
+              onPress={() => setCategory(c.id)}
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                paddingHorizontal: 16,
-                height: 38,
-                borderRadius: 19,
-                backgroundColor: active ? colors.oliveDeep : colors.surface,
-                borderWidth: active ? 0 : 1,
-                borderColor: colors.rule,
+                width: 128,
+                height: 170,
+                borderRadius: 18,
+                overflow: 'hidden',
+                borderWidth: active ? 2 : 1,
+                borderColor: active ? colors.goldDark : colors.ruleSoft,
+                backgroundColor: colors.surface2,
+                shadowColor: '#000',
+                shadowOpacity: active ? 0.18 : 0.08,
+                shadowRadius: active ? 12 : 8,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: active ? 6 : 3,
               }}
             >
-              <Ionicons
-                name={CATEGORY_ICONS[c] as any}
-                size={16}
-                color={active ? colors.goldSoft : colors.muted}
+              <Image
+                source={c.img}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+                resizeMode="cover"
               />
-              <Text
-                variant="bodySmall"
+              <LinearGradient
+                colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
+                start={{ x: 0.5, y: 0.4 }}
+                end={{ x: 0.5, y: 1 }}
+                style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' }}
+              />
+              <View
                 style={{
-                  color: active ? colors.goldSoft : colors.ink,
-                  fontWeight: active ? '600' : '400',
+                  position: 'absolute',
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
                 }}
               >
-                {t(`home.categories.${c}`)}
-              </Text>
+                <Ionicons
+                  name={CATEGORY_ICONS[c.id] as any}
+                  size={14}
+                  color={active ? colors.goldSoft : 'rgba(255,255,255,0.9)'}
+                />
+                <Text
+                  variant="bodySmall"
+                  style={{
+                    color: '#FFF',
+                    fontWeight: '700',
+                    fontFamily: theme.fontFamilies.display,
+                    fontSize: 14,
+                  }}
+                >
+                  {c.label}
+                </Text>
+              </View>
+              {active && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    backgroundColor: colors.goldDark,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="checkmark" size={14} color="#FFF" />
+                </View>
+              )}
             </Pressable>
           );
         })}

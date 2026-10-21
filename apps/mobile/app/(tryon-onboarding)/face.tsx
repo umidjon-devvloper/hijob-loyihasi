@@ -289,9 +289,12 @@ export default function TryonFaceScreen() {
                     onPress={() => pickBody(t)}
                     style={{
                       flex: 1, paddingTop: 12, paddingBottom: 10, paddingHorizontal: 6,
-                      backgroundColor: selected ? `${colors.oliveDeep}0A` : colors.surfaceAlt,
+                      // See body.tsx: transparent card so the figures sit
+                      // on the parent screen colour; selected card gets a
+                      // faint tint + border.
+                      backgroundColor: selected ? `${colors.oliveDeep}0A` : 'transparent',
                       borderWidth: selected ? 2 : 1,
-                      borderColor: selected ? colors.oliveDark : colors.rule,
+                      borderColor: selected ? colors.oliveDark : 'transparent',
                       borderRadius: 14, alignItems: 'center', position: 'relative',
                     }}
                   >

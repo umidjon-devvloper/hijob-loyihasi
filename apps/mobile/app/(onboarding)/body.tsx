@@ -360,9 +360,12 @@ function BodyTypeCard({
       onPress={onPress}
       style={{
         flex: 1, paddingTop: 12, paddingBottom: 10, paddingHorizontal: 6,
-        backgroundColor: selected ? `${colors.oliveDeep}0A` : colors.surfaceAlt,
+        // Transparent card background so the mannequin figures sit on
+        // the parent screen colour directly. Only the selected card gets
+        // a faint olive tint to signal state.
+        backgroundColor: selected ? `${colors.oliveDeep}0A` : 'transparent',
         borderWidth: selected ? 2 : 1,
-        borderColor: selected ? colors.oliveDark : colors.rule,
+        borderColor: selected ? colors.oliveDark : 'transparent',
         borderRadius: 14, alignItems: 'center', position: 'relative',
       }}
     >
