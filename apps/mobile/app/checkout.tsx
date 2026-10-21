@@ -79,7 +79,12 @@ export default function CheckoutScreen() {
     params.deliveryMethod === 'pickup' ? 'pickup' : params.deliveryMethod === 'proba' ? 'proba' : 'delivery';
 
   const [deliveryType, setDeliveryType] = useState<DeliveryType>(initialDelivery);
-  const [payment, setPayment] = useState<PaymentMethod>('click');
+  // Payment is coordinated with the seller after the order is placed, so
+  // we keep a stable sentinel the backend accepts rather than exposing a
+  // picker in the UI. If the backend rejects this value, update to the
+  // supported one here.
+  const payment: PaymentMethod = 'click';
+  void payment;
   const [addressId, setAddressId] = useState<string | null>(null);
   const [comment, setComment] = useState('');
   const [newAddressModal, setNewAddressModal] = useState(false);
@@ -133,7 +138,20 @@ export default function CheckoutScreen() {
     onSuccess: async (order) => {
       await qc.invalidateQueries({ queryKey: ['cart'] });
       await qc.invalidateQueries({ queryKey: ['orders'] });
-      router.replace({ pathname: '/orders/[id]', params: { id: order.orderId } });
+      const title = isRu ? 'Заказ отправлен' : "Buyurtma jo'natildi";
+      const msg = isRu
+        ? 'Продавец скоро свяжется с вами для подтверждения и оплаты.'
+        : "Sotuvchi tasdiqlash va to'lov uchun tez orada aloqaga chiqadi.";
+      Alert.alert(title, msg, [
+        {
+          text: 'OK',
+          onPress: () =>
+            router.replace({
+              pathname: '/orders/[id]',
+              params: { id: order.orderId },
+            }),
+        },
+      ]);
     },
     onError: (e: any) => {
       Alert.alert(errorTitle(), errorMessage(e));
@@ -235,11 +253,15 @@ export default function CheckoutScreen() {
           <SectionLabel>{isRu ? 'Способ доставки' : 'Yetkazish usuli'}</SectionLabel>
           <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
             <View style={{ backgroundColor: colors.surface, borderRadius: 18, borderWidth: 1, borderColor: colors.rule, overflow: 'hidden' }}>
-              {([
-                { id: 'delivery' as const, label: 'Kuryer', sub: `1-2 kun · $${DELIVERY_FEES.delivery}`, icon: 'bicycle-outline' as const },
-                { id: 'pickup' as const, label: 'Olib ketish', sub: 'Do\'kondan · bepul', icon: 'storefront-outline' as const },
-                { id: 'proba' as const, label: 'Proba (kiyib ko\'rish)', sub: `Kuryer kelsin · $${DELIVERY_FEES.proba}`, icon: 'shirt-outline' as const },
-              ]).map((m, i) => {
+              {(() => {
+                // "Proba (kiyib ko'rish)" olib tashlandi — bu har sotuvchining
+                // o'z do'konida yoqadigan/o'chiradigan opsiyasi bo'ladi,
+                // umumiy checkoutda tanlanmasin.
+                const methods = [
+                  { id: 'delivery' as const, label: 'Kuryer', sub: `1-2 kun · $${DELIVERY_FEES.delivery}`, icon: 'bicycle-outline' as const },
+                  { id: 'pickup' as const, label: 'Olib ketish', sub: "Do'kondan · bepul", icon: 'storefront-outline' as const },
+                ];
+                return methods.map((m, i) => {
                 const selected = deliveryType === m.id;
                 return (
                   <Pressable
@@ -248,7 +270,7 @@ export default function CheckoutScreen() {
                     style={{
                       flexDirection: 'row', alignItems: 'center', gap: 12,
                       padding: 14, paddingHorizontal: 16,
-                      borderBottomWidth: i < 2 ? 1 : 0, borderBottomColor: colors.rule,
+                      borderBottomWidth: i < methods.length - 1 ? 1 : 0, borderBottomColor: colors.rule,
                       backgroundColor: selected ? 'rgba(54,57,36,0.04)' : 'transparent',
                     }}
                   >
@@ -271,35 +293,52 @@ export default function CheckoutScreen() {
                     </View>
                   </Pressable>
                 );
-              })}
+                });
+              })()}
             </View>
           </View>
 
-          {/* Payment */}
-          <SectionLabel>{isRu ? 'Способ оплаты' : "To'lov usuli"}</SectionLabel>
+          {/* Seller-contact notice — payment is arranged directly with the
+              seller after the order is placed, so no card picker is shown. */}
           <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-              {PAYMENT_METHODS.map((p) => {
-                const selected = payment === p.id;
-                return (
-                  <Pressable
-                    key={p.id}
-                    onPress={() => setPayment(p.id)}
-                    style={{
-                      flexBasis: '48%',
-                      backgroundColor: colors.surface,
-                      borderRadius: 14,
-                      borderWidth: selected ? 2 : 1,
-                      borderColor: selected ? colors.oliveDeep : colors.rule,
-                      padding: 14,
-                      flexDirection: 'row', alignItems: 'center', gap: 10,
-                    }}
-                  >
-                    <Ionicons name={p.icon} size={20} color={colors.oliveDeep} />
-                    <Text variant="bodySmall" color="ink" style={{ fontSize: 14, fontWeight: '600' }}>{p.label}</Text>
-                  </Pressable>
-                );
-              })}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: 12,
+                padding: 14,
+                borderRadius: 16,
+                backgroundColor: `${colors.goldDark}10`,
+                borderWidth: 1,
+                borderColor: `${colors.goldDark}30`,
+              }}
+            >
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={20}
+                color={colors.goldDark}
+                style={{ marginTop: 1 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  variant="bodySmall"
+                  color="ink"
+                  style={{ fontSize: 13, fontWeight: '600', marginBottom: 3 }}
+                >
+                  {isRu
+                    ? 'Продавец скоро свяжется с вами'
+                    : "Sotuvchi tez orada aloqaga chiqadi"}
+                </Text>
+                <Text
+                  variant="caption"
+                  color="muted"
+                  style={{ fontSize: 11, lineHeight: 15 }}
+                >
+                  {isRu
+                    ? 'Способ оплаты и условия примерки согласуйте с продавцом по телефону или в Telegram.'
+                    : "To'lov usuli va kiyib ko'rish shartlari sotuvchi bilan telefon yoki Telegram orqali kelishiladi."}
+                </Text>
+              </View>
             </View>
           </View>
 
