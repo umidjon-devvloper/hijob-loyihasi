@@ -1,0 +1,31 @@
+{
+  "cli": {
+    "version": ">= 24.8.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+  "ios": {
+    "image": "macos-sequoia-15.6-xcode-26.0"
+  },
+  "autoIncrement": true
+}
+  },
+  "submit": {
+    "production": {
+      "ios":{
+        "ascAppId": "6825178745",
+      "ascApiKeyPath": "./AuthKey_3398M2283Y.p8",
+      "ascApiKeyId": "3398M2283Y",
+    "ascApiKeyIssuerId": "1fe4411f-92e9-4881-8288-8aeae4f2ad86"
+      }
+    }
+  }
+}

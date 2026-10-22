@@ -28,12 +28,14 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>n2431</string>
-          <string>app.n2431.mobile</string>
+          <string>uz.hijab.app</string>
         </array>
       </dict>
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
@@ -41,23 +43,18 @@
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>
-      <true/>
+      <false/>
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>24:31 lokal server orqali rasm va ma'lumotlarni yuklash uchun lokal tarmoqdan foydalanadi.</string>
-    <key>NSBonjourServices</key>
-    <array>
-      <string>_expo-dev-server._tcp</string>
-      <string>_http._tcp</string>
-    </array>
     <key>NSCameraUsageDescription</key>
     <string>24:31 kamerani yuzingizni skanerlash uchun ishlatadi.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to save photos</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Kutubxonaga faqat sizning ruxsatingiz bilan kirish.</string>
     <key>NSUserActivityTypes</key>

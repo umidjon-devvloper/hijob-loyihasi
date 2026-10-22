@@ -63,25 +63,5 @@ target 'N2431' do
         end
       end
     end
-
-    # Xcode 16+/26 enables Swift Explicit Modules by default, which races the
-    # modulemap of local Swift pods (AppleFaceDetector) and fails bridging
-    # header dependency scans with 1000+ cascading errors. Opt out for every
-    # target so the legacy implicit-module build keeps working.
-    installer.pods_project.targets.each do |t|
-      t.build_configurations.each do |cfg|
-        cfg.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
-        cfg.build_settings['SWIFT_USE_INTEGRATED_DRIVER'] = 'NO'
-      end
-    end
-    installer.aggregate_targets.each do |t|
-      t.user_project.native_targets.each do |nt|
-        nt.build_configurations.each do |cfg|
-          cfg.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
-          cfg.build_settings['SWIFT_USE_INTEGRATED_DRIVER'] = 'NO'
-        end
-      end
-      t.user_project.save
-    end
   end
 end
