@@ -5,10 +5,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
+import { Stack as ExpoStack } from 'expo-router';
 import { ThemeProvider } from '../src/theme/ThemeProvider';
 import { initI18n } from '../src/i18n/i18n';
 import { useAuth } from '../src/store/auth';
 import { useTryonOnboarding } from '../src/store/tryon-onboarding';
+import { registerPushToken, attachPushListeners } from '../src/lib/push';
+import { router } from 'expo-router';
 // Side-effect import: patches Alert.alert to be nil-safe (iOS 26 crash fix).
 import '../src/lib/safe-alert';
 
@@ -27,6 +30,7 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const [i18nReady, setI18nReady] = useState(false);
   const hydrate = useAuth((s) => s.hydrate);
+  const isAuthed = useAuth((s) => s.isAuthed);
   const hydrateTryon = useTryonOnboarding((s) => s.hydrate);
 
   const [fontsLoaded] = useFonts({
@@ -43,6 +47,28 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded && i18nReady) SplashScreen.hideAsync().catch(() => {});
   }, [fontsLoaded, i18nReady]);
+
+  // Push notifications — register the token once we know the user is
+  // signed in, and route to the right screen when they tap a push.
+  useEffect(() => {
+    if (!isAuthed) return;
+    registerPushToken().catch(() => {});
+    const detach = attachPushListeners((data) => {
+      // seller_new | chat_message | order_update → open the right place.
+      try {
+        if (data?.kind === 'seller_new' && data?.orderId) {
+          router.push('/(seller-tabs)/orders' as any);
+        } else if (data?.kind === 'chat_message' && data?.chatId) {
+          router.push({ pathname: '/chat/[id]', params: { id: String(data.chatId) } } as any);
+        } else if (data?.orderId) {
+          router.push('/orders' as any);
+        } else {
+          router.push('/notifications' as any);
+        }
+      } catch {}
+    });
+    return detach;
+  }, [isAuthed]);
 
   if (!fontsLoaded || !i18nReady) return null;
 

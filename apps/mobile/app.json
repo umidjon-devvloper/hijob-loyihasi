@@ -58,6 +58,14 @@
         }
       ],
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#C9A96E",
+          "defaultChannel": "default"
+        }
+      ],
+      [
         "react-native-vision-camera",
         {
           "cameraPermissionText": "24:31 real-time try-on uchun kameraga ruxsat so'raydi.",
