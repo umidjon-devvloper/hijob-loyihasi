@@ -32,6 +32,7 @@ import { api } from '../../src/api/client';
 import { errorMessage, errorTitle } from '../../src/lib/api-errors';
 import { safeBack } from '../../src/lib/safe-back';
 import { useUzsRate, usdToUzs, formatUzs } from '../../src/lib/currency';
+import { SCENES, type SceneId } from '../../src/lib/scenes';
 
 type CategoryId = 'scarves' | 'dresses' | 'shoes' | 'bags' | 'accessories';
 
@@ -119,6 +120,10 @@ export default function AddProductScreen() {
   const [variants, setVariants] = useState<Variant[]>([emptyVariant('scarves')]);
   const [showCategory, setShowCategory] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  // Podium backdrop the buyer sees behind the mannequin on the Primerka
+  // tab + product hero. Stored inside Product.attributes.sceneId so no
+  // schema migration is needed.
+  const [sceneId, setSceneId] = useState<SceneId>('beige');
 
   // Resolves the current USD price regardless of which currency the
   // seller is typing in. UZS entries are divided by the live rate.
@@ -233,6 +238,7 @@ export default function AddProductScreen() {
         bodyFit: bodyFit ?? undefined,
         basePriceUsd: Math.round(resolvedUsdPrice * 100) / 100,
         coverUrl: coverUrl!,
+        attributes: { sceneId },
         variants: variants.map((v, i) => ({
           color: v.color.trim(),
           colorHex: v.colorHex,
@@ -434,6 +440,60 @@ export default function AddProductScreen() {
             )}
           </>
         )}
+
+        {/* Mannequin podium backdrop — three studio scenes the buyer sees
+            on the Primerka tab + product hero. Default: 'beige'. */}
+        <Text variant="label" color="muted" style={{ marginTop: 20, marginBottom: 8 }}>
+          Orqa fon (podium)
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 10, paddingVertical: 2 }}
+        >
+          {SCENES.map((s) => {
+            const active = s.id === sceneId;
+            return (
+              <Pressable
+                key={s.id}
+                onPress={() => setSceneId(s.id)}
+                style={{
+                  width: 110,
+                  borderRadius: 14,
+                  borderWidth: active ? 3 : 1,
+                  borderColor: active ? colors.gold : colors.rule,
+                  overflow: 'hidden',
+                  backgroundColor: colors.surface,
+                }}
+              >
+                <Image
+                  source={s.source}
+                  style={{ width: '100%', height: 130 }}
+                  resizeMode="cover"
+                />
+                <View
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <Text
+                    variant="caption"
+                    style={{ fontSize: 11, fontWeight: '600', color: colors.ink }}
+                  >
+                    {s.label.uz}
+                  </Text>
+                  {active && (
+                    <Ionicons name="checkmark-circle" size={16} color={colors.gold} />
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
         {/* Variants */}
         <View style={styles.variantsHeader}>

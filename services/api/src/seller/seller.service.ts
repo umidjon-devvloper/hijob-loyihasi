@@ -512,12 +512,27 @@ export class SellerService {
   async updateProduct(
     userId: string,
     productId: string,
-    dto: { titleUz?: string; titleRu?: string; basePriceUsd?: number; descriptionUz?: string; descriptionRu?: string },
+    dto: {
+      titleUz?: string;
+      titleRu?: string;
+      basePriceUsd?: number;
+      descriptionUz?: string;
+      descriptionRu?: string;
+      sceneId?: string | null;
+    },
   ) {
     const seller = await this.requireSeller(userId);
     const product = await this.prisma.product.findUnique({ where: { id: productId } });
     if (!product) throw new NotFoundException('PRODUCT_NOT_FOUND');
     if (product.sellerId !== seller.id) throw new ForbiddenException('NOT_YOUR_PRODUCT');
+
+    // sceneId lives inside the free-form attributes JSON — one of the three
+    // podium backdrops the seller picked in add-product. Null clears it.
+    let nextAttributes: Record<string, unknown> | undefined;
+    if (dto.sceneId !== undefined) {
+      const prev = (product.attributes as Record<string, unknown>) ?? {};
+      nextAttributes = { ...prev, sceneId: dto.sceneId };
+    }
 
     const updated = await this.prisma.product.update({
       where: { id: productId },
@@ -527,6 +542,7 @@ export class SellerService {
         ...(dto.basePriceUsd !== undefined && { basePriceUsd: dto.basePriceUsd }),
         ...(dto.descriptionUz !== undefined && { descriptionUz: dto.descriptionUz }),
         ...(dto.descriptionRu !== undefined && { descriptionRu: dto.descriptionRu }),
+        ...(nextAttributes !== undefined && { attributes: nextAttributes as object }),
       },
     });
     return { id: updated.id, status: updated.status };

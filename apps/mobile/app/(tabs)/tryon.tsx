@@ -12,6 +12,7 @@ import { api } from '../../src/api/client';
 import { errorMessage, errorTitle } from '../../src/lib/api-errors';
 import { useTryonOnboarding, type BodyType } from '../../src/store/tryon-onboarding';
 import { useTryonCollection, TRYON_ALLOWED_CATEGORIES } from '../../src/store/tryon-collection';
+import { sceneById } from '../../src/lib/scenes';
 
 interface Variant {
   id: string;
@@ -34,6 +35,7 @@ interface Product {
   basePriceUsd: number;
   coverUrl: string;
   resultVariants?: Record<string, string> | null;
+  attributes?: Record<string, unknown> | null;
   variants: Variant[];
 }
 
@@ -389,7 +391,9 @@ export default function TryOnScreen() {
           }}
         >
           <Image
-            source={FITTING_ROOM}
+            source={
+              sceneById((selected?.attributes as any)?.sceneId)?.source ?? FITTING_ROOM
+            }
             style={{
               position: 'absolute',
               top: 0,
@@ -851,7 +855,7 @@ function ProductThumb({
       }}
     >
       <Image
-        source={FITTING_ROOM}
+        source={sceneById((product.attributes as any)?.sceneId)?.source ?? FITTING_ROOM}
         style={{
           position: 'absolute',
           top: 0,

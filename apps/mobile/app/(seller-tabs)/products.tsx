@@ -64,17 +64,52 @@ export default function SellerProductsScreen() {
           onPress: () => router.push(`/seller/product/${item.id}` as any),
         },
         {
-          text: L('Tahrirlash', 'Редактировать', 'Edit', 'تعديل'),
+          text: L('Narx', 'Цена', 'Price', 'السعر'),
           onPress: () => promptEdit(item),
+        },
+        {
+          text: L('Orqa fon', 'Фон', 'Backdrop', 'الخلفية'),
+          onPress: () => promptScene(item),
         },
         {
           text: L('O\'chirish', 'Удалить', 'Delete', 'حذف'),
           style: 'destructive',
           onPress: () => confirmDelete(item),
         },
-        { text: L('Bekor', 'Отмена', 'Cancel', 'إلغاء'), style: 'cancel' },
+        { text: L('Bekor', 'Отмена', 'Cancel', 'إلغаء'), style: 'cancel' },
       ],
     );
+  };
+
+  const promptScene = (item: SellerProduct) => {
+    Alert.alert(
+      L('Orqa fonni tanlang', 'Выберите фон', 'Pick a backdrop', 'اختر الخلفية'),
+      item.titleRu || '',
+      [
+        {
+          text: L('Zumrad ko\'k', 'Голубой', 'Blue', 'أزرق'),
+          onPress: () => applyScene(item.id, 'blue'),
+        },
+        {
+          text: L('Zaytun', 'Оливковый', 'Olive', 'زيتوني'),
+          onPress: () => applyScene(item.id, 'olive'),
+        },
+        {
+          text: L('Krem', 'Бежевый', 'Beige', 'بيج'),
+          onPress: () => applyScene(item.id, 'beige'),
+        },
+        { text: L('Bekor', 'Отмена', 'Cancel', 'إلغаء'), style: 'cancel' },
+      ],
+    );
+  };
+
+  const applyScene = async (productId: string, sceneId: 'blue' | 'olive' | 'beige') => {
+    try {
+      await api.patch(`/seller/products/${productId}`, { sceneId });
+      await queryClient.invalidateQueries({ queryKey: ['seller', 'products'] });
+    } catch (e: any) {
+      Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), e?.response?.data?.message ?? e?.message ?? 'xatolik');
+    }
   };
 
   const promptEdit = (item: SellerProduct) => {

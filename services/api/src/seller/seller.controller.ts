@@ -90,7 +90,15 @@ export class SellerController {
   updateProduct(
     @CurrentUser() user: CurrentUserInfo,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() body: { titleUz?: string; titleRu?: string; basePriceUsd?: number; descriptionUz?: string; descriptionRu?: string },
+    @Body()
+    body: {
+      titleUz?: string;
+      titleRu?: string;
+      basePriceUsd?: number;
+      descriptionUz?: string;
+      descriptionRu?: string;
+      sceneId?: string | null;
+    },
   ) {
     return this.seller.updateProduct(user.id, id, body);
   }
