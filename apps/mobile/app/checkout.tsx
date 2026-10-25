@@ -48,6 +48,8 @@ interface Address {
   street: string;
   building: string;
   apartment: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   isDefault: boolean;
 }
 
@@ -506,6 +508,47 @@ function NewAddressModal({ onClose, onCreated }: NewAddressModalProps) {
   const [street, setStreet] = useState('');
   const [building, setBuilding] = useState('');
   const [apartment, setApartment] = useState('');
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+
+  const pickCurrentLocation = async () => {
+    try {
+      setLocating(true);
+      const Location = await import('expo-location');
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          'Ruxsat kerak',
+          "Joylashuvni aniqlash uchun ilovaga ruxsat bering.",
+        );
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+
+      // Reverse-geocode so the city / district / street fields fill in on
+      // their own; the user can still tweak anything that's off.
+      try {
+        const places = await Location.reverseGeocodeAsync(pos.coords);
+        const p = places[0];
+        if (p) {
+          if (p.city && !city) setCity(p.city);
+          if (p.district && !district) setDistrict(p.district);
+          if (p.street && !street) setStreet(p.street);
+          if (p.streetNumber && !building) setBuilding(p.streetNumber);
+        }
+      } catch {
+        // Reverse geocode is best-effort; the coords alone are enough for
+        // the seller to pin the drop-off.
+      }
+    } catch (e: any) {
+      Alert.alert('Xato', e?.message ?? 'Joylashuvni aniqlab bo\'lmadi');
+    } finally {
+      setLocating(false);
+    }
+  };
 
   const create = useMutation({
     mutationFn: async () => {
@@ -516,6 +559,8 @@ function NewAddressModal({ onClose, onCreated }: NewAddressModalProps) {
         street: street.trim(),
         building: building.trim(),
         apartment: apartment.trim() || undefined,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude,
       });
       return data as Address;
     },
@@ -545,6 +590,45 @@ function NewAddressModal({ onClose, onCreated }: NewAddressModalProps) {
             </View>
 
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+              <Pressable
+                onPress={pickCurrentLocation}
+                disabled={locating}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  backgroundColor: coords ? colors.success + '22' : colors.surface,
+                  borderWidth: 1,
+                  borderColor: coords ? colors.success : colors.rule,
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  marginBottom: 14,
+                  opacity: locating ? 0.6 : 1,
+                }}
+              >
+                {locating ? (
+                  <ActivityIndicator color={colors.oliveDeep} size="small" />
+                ) : (
+                  <Ionicons
+                    name={coords ? 'checkmark-circle' : 'location'}
+                    size={18}
+                    color={coords ? colors.success : colors.oliveDeep}
+                  />
+                )}
+                <Text
+                  variant="bodySmall"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '600',
+                    color: coords ? colors.success : colors.oliveDeep,
+                  }}
+                >
+                  {coords
+                    ? 'Joylashuv olindi ✓'
+                    : 'Joriy joylashuvni olish'}
+                </Text>
+              </Pressable>
               <AddrField label="Nom (uy, ish...)" value={label} onChange={setLabel} />
               <AddrField label="Shahar" value={city} onChange={setCity} />
               <AddrField label="Tuman" value={district} onChange={setDistrict} placeholder="Chilonzor" />

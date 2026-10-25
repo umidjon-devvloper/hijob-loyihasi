@@ -5,6 +5,7 @@ import { DeliveryType, DeliverySpeed, PaymentMethod } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushService } from '../push/push.service';
 import { SettingsService } from '../settings/settings.service';
+import { ChatsService } from '../chats/chats.service';
 
 const DELIVERY_FEES: Record<DeliveryType, Record<DeliverySpeed | 'default', number>> = {
   delivery: { today: 5, tomorrow: 3, scheduled: 4, default: 5 },
@@ -26,6 +27,7 @@ export class OrdersService {
     private readonly notifications: NotificationsService,
     private readonly push: PushService,
     private readonly settings: SettingsService,
+    private readonly chats: ChatsService,
   ) {}
 
   async checkout(userId: string, dto: CheckoutDto) {
@@ -127,6 +129,31 @@ export class OrdersService {
       const sellerBrand =
         variants[0]?.product.seller?.brandName ?? '';
 
+      // Per-seller breakdown so the post-tx hook can auto-open a chat with
+      // each shop in this basket and drop a receipt message carrying the
+      // items + location + buyer phone the seller needs to deliver.
+      const itemsBySeller = new Map<
+        string,
+        { sellerUserId: string | null; brand: string; items: typeof orderItems }
+      >();
+      for (let i = 0; i < orderItems.length; i++) {
+        const oi = orderItems[i]!;
+        const v = variants.find((x) => x.id === oi.variantId)!;
+        const sellerId = v.product.seller?.id;
+        if (!sellerId) continue;
+        const bucket = itemsBySeller.get(sellerId) ?? {
+          sellerUserId: v.product.seller?.userId ?? null,
+          brand: v.product.seller?.brandName ?? '',
+          items: [],
+        };
+        bucket.items.push(oi);
+        itemsBySeller.set(sellerId, bucket);
+      }
+      const buyer = await tx.user.findUnique({
+        where: { id: userId },
+        select: { phone: true, fullName: true },
+      });
+
       // TZ Phase 8 — snapshot the UZS total at order time so the receipt
       // never drifts after admin changes the rate.
       const uzsTotal = await this.settings.toUzs(total);
@@ -139,6 +166,23 @@ export class OrdersService {
         paymentUrl: `https://payme.dev/checkout/${order.id}`,
         sellerUserIds,
         sellerBrand,
+        itemsBySeller: Array.from(itemsBySeller.entries()).map(([sellerId, b]) => ({
+          sellerId,
+          sellerUserId: b.sellerUserId,
+          brand: b.brand,
+          items: b.items,
+        })),
+        buyerPhone: buyer?.phone ?? null,
+        buyerName: buyer?.fullName ?? null,
+        addressSnapshot: {
+          city: address.city,
+          district: address.district,
+          street: address.street,
+          building: address.building,
+          apartment: address.apartment,
+          latitude: address.latitude ? Number(address.latitude) : null,
+          longitude: address.longitude ? Number(address.longitude) : null,
+        },
       };
       return result;
     }).then(async (result) => {
@@ -182,6 +226,71 @@ export class OrdersService {
         }),
       );
 
+      // TZ Phase 5.2 — auto-open a chat with every shop in this order and
+      // drop a receipt message carrying what the seller needs to deliver
+      // (items + buyer phone + full address with lat/lng). The buyer gets
+      // one ready-made chat thread per shop in their inbox, the seller
+      // gets the same thread on their side. Pure best-effort — a failed
+      // chat write never rolls back the order.
+      const addrLine = [
+        result.addressSnapshot.city,
+        result.addressSnapshot.district,
+        result.addressSnapshot.street,
+        result.addressSnapshot.building,
+        result.addressSnapshot.apartment,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      await Promise.all(
+        result.itemsBySeller.map(async (bucket) => {
+          try {
+            const chat = await this.chats.openChat(userId, bucket.sellerId);
+            const lines: string[] = [
+              `📦 Buyurtma ${orderShort}`,
+              '',
+              ...bucket.items.map(
+                (it) =>
+                  `• ${it.titleSnapshot} — ${it.colorSnapshot}, ${it.sizeSnapshot} × ${it.quantity}`,
+              ),
+              '',
+              `📍 ${addrLine || "Manzil kiritilmagan"}`,
+            ];
+            if (
+              result.addressSnapshot.latitude != null &&
+              result.addressSnapshot.longitude != null
+            ) {
+              lines.push(
+                `🗺️ https://maps.google.com/?q=${result.addressSnapshot.latitude},${result.addressSnapshot.longitude}`,
+              );
+            }
+            if (result.buyerPhone) lines.push(`📞 ${result.buyerPhone}`);
+            if (result.buyerName) lines.push(`👤 ${result.buyerName}`);
+
+            await this.chats.sendMessage(userId, chat.id, {
+              kind: 'receipt',
+              body: lines.join('\n'),
+              payload: {
+                orderId: result.orderId,
+                items: bucket.items.map((it) => ({
+                  title: it.titleSnapshot,
+                  color: it.colorSnapshot,
+                  size: it.sizeSnapshot,
+                  quantity: it.quantity,
+                  image: it.imageSnapshot,
+                })),
+                buyerPhone: result.buyerPhone,
+                buyerName: result.buyerName,
+                address: result.addressSnapshot,
+              },
+            });
+          } catch (err) {
+            this.logger.warn(
+              `auto-chat for seller ${bucket.sellerId} failed: ${(err as Error).message}`,
+            );
+          }
+        }),
+      );
+
       // Caller only cares about the buyer-facing fields.
       return {
         orderId: result.orderId,
@@ -196,18 +305,81 @@ export class OrdersService {
     const orders = await this.prisma.order.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      include: { items: true, address: true },
+      include: {
+        items: {
+          include: {
+            variant: {
+              select: {
+                product: {
+                  select: {
+                    seller: {
+                      select: { id: true, brandName: true, logoUrl: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        address: true,
+      },
     });
-    return orders.map((o) => this.toPublicOrder(o));
+
+    // Each order can span multiple shops. Collect every distinct seller
+    // the buyer touched so we can hand back the chat id per shop.
+    const sellerIds = Array.from(
+      new Set(
+        orders.flatMap((o) =>
+          o.items.map((it) => it.variant?.product?.seller?.id).filter((x): x is string => !!x),
+        ),
+      ),
+    );
+    const chats = sellerIds.length
+      ? await this.prisma.chat.findMany({
+          where: { buyerUserId: userId, sellerId: { in: sellerIds } },
+          select: { id: true, sellerId: true },
+        })
+      : [];
+    const chatBySeller = new Map(chats.map((c) => [c.sellerId, c.id]));
+    return orders.map((o) => this.toPublicOrder(o, chatBySeller));
   }
 
   async getOrder(userId: string, id: string) {
     const order = await this.prisma.order.findFirst({
       where: { id, userId },
-      include: { items: true, address: true },
+      include: {
+        items: {
+          include: {
+            variant: {
+              select: {
+                product: {
+                  select: {
+                    seller: { select: { id: true, brandName: true, logoUrl: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        address: true,
+      },
     });
     if (!order) throw new NotFoundException('ORDER_NOT_FOUND');
-    return this.toPublicOrder(order);
+    const sellerIds = Array.from(
+      new Set(
+        order.items
+          .map((it) => it.variant?.product?.seller?.id)
+          .filter((x): x is string => !!x),
+      ),
+    );
+    const chats = sellerIds.length
+      ? await this.prisma.chat.findMany({
+          where: { buyerUserId: userId, sellerId: { in: sellerIds } },
+          select: { id: true, sellerId: true },
+        })
+      : [];
+    const chatBySeller = new Map(chats.map((c) => [c.sellerId, c.id]));
+    return this.toPublicOrder(order, chatBySeller);
   }
 
   /**
@@ -252,10 +424,29 @@ export class OrdersService {
     }));
   }
 
-  private toPublicOrder(o: Awaited<ReturnType<PrismaService['order']['findFirst']>> & {
-    items: Array<any>;
-    address: any;
-  }) {
+  private toPublicOrder(
+    o: Awaited<ReturnType<PrismaService['order']['findFirst']>> & {
+      items: Array<any>;
+      address: any;
+    },
+    chatBySeller?: Map<string, string>,
+  ) {
+    const sellerMap = new Map<
+      string,
+      { id: string; brandName: string; logoUrl: string | null; chatId: string | null }
+    >();
+    for (const it of o!.items) {
+      const s = it.variant?.product?.seller;
+      if (s && !sellerMap.has(s.id)) {
+        sellerMap.set(s.id, {
+          id: s.id,
+          brandName: s.brandName,
+          logoUrl: s.logoUrl ?? null,
+          chatId: chatBySeller?.get(s.id) ?? null,
+        });
+      }
+    }
+
     return {
       id: o!.id,
       status: o!.orderStatus,
@@ -274,8 +465,12 @@ export class OrdersService {
             district: o!.address.district,
             street: o!.address.street,
             building: o!.address.building,
+            apartment: o!.address.apartment,
+            latitude: o!.address.latitude ? Number(o!.address.latitude) : null,
+            longitude: o!.address.longitude ? Number(o!.address.longitude) : null,
           }
         : null,
+      sellers: Array.from(sellerMap.values()),
       items: o!.items.map((it: any) => ({
         title: it.titleSnapshot,
         color: it.colorSnapshot,
@@ -283,6 +478,8 @@ export class OrdersService {
         quantity: it.quantity,
         priceUsd: Number(it.priceSnapshot),
         image: it.imageSnapshot,
+        sellerId: it.variant?.product?.seller?.id ?? null,
+        sellerBrand: it.variant?.product?.seller?.brandName ?? null,
       })),
       timeline: this.orderTimeline(o!.orderStatus, o!.deliveryType),
     };

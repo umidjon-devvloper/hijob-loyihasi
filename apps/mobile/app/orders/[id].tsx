@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../src/components/Screen';
 import { Text } from '../../src/components/Text';
@@ -18,7 +18,14 @@ interface OrderDetail {
   subtotalUsd: number;
   deliveryFeeUsd: number;
   createdAt: string;
-  address: { city: string; district: string; street: string; building: string } | null;
+  address: {
+    city: string;
+    district: string;
+    street: string;
+    building: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null;
   items: Array<{
     title: string;
     color: string;
@@ -26,6 +33,14 @@ interface OrderDetail {
     quantity: number;
     priceUsd: number;
     image: string;
+    sellerId: string | null;
+    sellerBrand: string | null;
+  }>;
+  sellers?: Array<{
+    id: string;
+    brandName: string;
+    logoUrl: string | null;
+    chatId: string | null;
   }>;
   timeline: Array<{ key: string; label: string; reached: boolean; active: boolean }>;
 }
@@ -200,6 +215,86 @@ export default function OrderDetailScreen() {
           ))}
         </View>
 
+        {/* Sellers — one chat per shop in the basket */}
+        {data.sellers && data.sellers.length > 0 && (
+          <View style={{ marginHorizontal: 16, marginTop: 12 }}>
+            <Text
+              variant="caption"
+              color="muted"
+              style={{
+                fontSize: 11,
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+                marginBottom: 8,
+                paddingLeft: 4,
+              }}
+            >
+              Sotuvchilar bilan aloqa
+            </Text>
+            <View style={{ gap: 8 }}>
+              {data.sellers.map((s) => (
+                <Pressable
+                  key={s.id}
+                  onPress={async () => {
+                    try {
+                      let chatId = s.chatId;
+                      if (!chatId) {
+                        const { data: chat } = await api.post(`/chats/open/${s.id}`);
+                        chatId = chat?.id ?? null;
+                      }
+                      if (chatId) {
+                        router.push({
+                          pathname: '/chat/[id]',
+                          params: { id: chatId },
+                        } as any);
+                      }
+                    } catch {}
+                  }}
+                  style={{
+                    padding: 14,
+                    borderRadius: theme.radii.lg,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.rule,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  {s.logoUrl ? (
+                    <Image
+                      source={{ uri: s.logoUrl }}
+                      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt }}
+                    />
+                  ) : (
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: colors.surfaceAlt,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="storefront-outline" size={18} color={colors.ink} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text variant="body" color="ink" style={{ fontWeight: '600' }}>
+                      {s.brandName}
+                    </Text>
+                    <Text variant="caption" color="muted" style={{ fontSize: 12 }}>
+                      {s.chatId ? 'Chatni ochish' : 'Yangi chat ochish'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chatbubble-outline" size={20} color={colors.gold} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Address */}
         {data.address && (
           <View
@@ -224,6 +319,21 @@ export default function OrderDetailScreen() {
               <Text variant="bodySmall" color="ink2">
                 {data.address.street}, {data.address.building}
               </Text>
+              {data.address.latitude != null && data.address.longitude != null && (
+                <Pressable
+                  onPress={() =>
+                    Linking.openURL(
+                      `https://maps.google.com/?q=${data.address!.latitude},${data.address!.longitude}`,
+                    )
+                  }
+                  style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                >
+                  <Ionicons name="map-outline" size={14} color={colors.gold} />
+                  <Text variant="caption" style={{ fontSize: 12, color: colors.gold, fontWeight: '600' }}>
+                    Xaritada ko'rish
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </View>
         )}

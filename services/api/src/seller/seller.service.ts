@@ -249,27 +249,65 @@ export class SellerService {
             variant: { include: { product: { select: { titleRu: true, coverUrl: true } } } },
           },
         },
-        user: { select: { fullName: true, username: true, phone: true } },
+        user: { select: { id: true, fullName: true, username: true, phone: true } },
+        address: true,
       },
       take: 100,
     });
 
-    return orders.map((o) => ({
-      id: o.id,
-      code: o.id.slice(0, 8).toUpperCase(),
-      customerName: o.user.fullName || `@${o.user.username}`,
-      time: o.createdAt.toISOString(),
-      status: this.mapOrderStatus(o.orderStatus),
-      total: o.items.reduce((sum, it) => sum + Number(it.priceSnapshot) * it.quantity, 0),
-      tracking: null as string | null,
-      items: o.items.map((it) => ({
-        name: it.titleSnapshot ?? it.variant.product.titleRu,
-        color: it.colorSnapshot ?? it.variant.color,
-        size: it.sizeSnapshot ?? it.variant.size,
-        qty: it.quantity,
-        imageUrl: it.imageSnapshot ?? it.variant.product.coverUrl,
-      })),
-    }));
+    // One-shot lookup of each buyer's chat with this seller — the panel
+    // uses the id to deep-link straight into the thread the checkout
+    // flow auto-created.
+    const buyerIds = Array.from(new Set(orders.map((o) => o.user.id)));
+    const chats = buyerIds.length
+      ? await this.prisma.chat.findMany({
+          where: { sellerId: seller.id, buyerUserId: { in: buyerIds } },
+          select: { id: true, buyerUserId: true },
+        })
+      : [];
+    const chatByBuyer = new Map(chats.map((c) => [c.buyerUserId, c.id]));
+
+    return orders.map((o) => {
+      const snap = (o.addressSnapshot ?? null) as Record<string, any> | null;
+      const addr = o.address;
+      const lat =
+        (addr?.latitude != null ? Number(addr.latitude) : null) ??
+        (snap?.latitude != null ? Number(snap.latitude) : null);
+      const lng =
+        (addr?.longitude != null ? Number(addr.longitude) : null) ??
+        (snap?.longitude != null ? Number(snap.longitude) : null);
+      const addressLine = [
+        addr?.city ?? snap?.city,
+        addr?.district ?? snap?.district,
+        addr?.street ?? snap?.street,
+        addr?.building ?? snap?.building,
+        addr?.apartment ?? snap?.apartment,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      return {
+        id: o.id,
+        code: o.id.slice(0, 8).toUpperCase(),
+        customerName: o.user.fullName || `@${o.user.username}`,
+        customerPhone: o.user.phone,
+        time: o.createdAt.toISOString(),
+        status: this.mapOrderStatus(o.orderStatus),
+        total: o.items.reduce((sum, it) => sum + Number(it.priceSnapshot) * it.quantity, 0),
+        tracking: null as string | null,
+        deliveryType: o.deliveryType,
+        address: addressLine || null,
+        location: lat != null && lng != null ? { latitude: lat, longitude: lng } : null,
+        mapsUrl: lat != null && lng != null ? `https://maps.google.com/?q=${lat},${lng}` : null,
+        chatId: chatByBuyer.get(o.user.id) ?? null,
+        items: o.items.map((it) => ({
+          name: it.titleSnapshot ?? it.variant.product.titleRu,
+          color: it.colorSnapshot ?? it.variant.color,
+          size: it.sizeSnapshot ?? it.variant.size,
+          qty: it.quantity,
+          imageUrl: it.imageSnapshot ?? it.variant.product.coverUrl,
+        })),
+      };
+    });
   }
 
   // Collapses the backend's richer order lifecycle into the four buckets the

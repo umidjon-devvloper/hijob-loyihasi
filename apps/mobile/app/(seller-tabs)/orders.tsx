@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, FlatList, Image, Pressable, RefreshControl, View } from 'react-native';
+import { Alert, FlatList, Image, Linking, Pressable, RefreshControl, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,11 +24,17 @@ interface SellerOrder {
   id: string;
   code: string;
   customerName: string;
+  customerPhone?: string | null;
   time: string;
   items: OrderItem[];
   total: number;
   status: OrderStatus;
   tracking?: string;
+  deliveryType?: string;
+  address?: string | null;
+  location?: { latitude: number; longitude: number } | null;
+  mapsUrl?: string | null;
+  chatId?: string | null;
 }
 
 const STATUS_LABELS: Record<OrderStatus, Record<'uz' | 'ru' | 'en' | 'ar', string>> = {
@@ -50,6 +57,7 @@ export default function SellerOrdersScreen() {
   const { colors, theme } = useTheme();
   const { i18n } = useTranslation();
   const qc = useQueryClient();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<OrderStatus>('new');
   const isRu = (i18n.language?.slice(0, 2) ?? 'uz') === 'ru';
   const lang = (i18n.language?.slice(0, 2) ?? 'uz') as 'uz' | 'ru' | 'en' | 'ar';
@@ -260,6 +268,112 @@ export default function SellerOrdersScreen() {
                   </Text>
                 </View>
               </View>
+
+              {/* Customer contact row — phone + map + chat links so the
+                  seller can act in one tap. Only renders when at least one
+                  of the three channels is available. */}
+              {(item.customerPhone || item.mapsUrl || item.chatId) && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    gap: 8,
+                    marginBottom: 10,
+                  }}
+                >
+                  {item.customerPhone ? (
+                    <Pressable
+                      onPress={() => Linking.openURL(`tel:${item.customerPhone}`)}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        backgroundColor: colors.surfaceAlt,
+                        borderWidth: 1,
+                        borderColor: colors.rule,
+                      }}
+                    >
+                      <Ionicons name="call-outline" size={14} color={colors.ink} />
+                      <Text
+                        variant="caption"
+                        color="ink"
+                        style={{ fontSize: 11, fontWeight: '600' }}
+                      >
+                        {L('Qo\'ng\'iroq', 'Звонок', 'Call', 'اتصال')}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {item.mapsUrl ? (
+                    <Pressable
+                      onPress={() => Linking.openURL(item.mapsUrl!)}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        backgroundColor: colors.surfaceAlt,
+                        borderWidth: 1,
+                        borderColor: colors.rule,
+                      }}
+                    >
+                      <Ionicons name="location-outline" size={14} color={colors.ink} />
+                      <Text
+                        variant="caption"
+                        color="ink"
+                        style={{ fontSize: 11, fontWeight: '600' }}
+                      >
+                        {L('Xaritada', 'На карте', 'Map', 'الخريطة')}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {item.chatId ? (
+                    <Pressable
+                      onPress={() =>
+                        router.push({
+                          pathname: '/chat/[id]',
+                          params: { id: item.chatId! },
+                        } as any)
+                      }
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        backgroundColor: colors.oliveDeep,
+                      }}
+                    >
+                      <Ionicons name="chatbubble-outline" size={14} color={colors.goldSoft} />
+                      <Text
+                        variant="caption"
+                        style={{ fontSize: 11, fontWeight: '700', color: colors.goldSoft }}
+                      >
+                        {L('Chat', 'Чат', 'Chat', 'الدردشة')}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              )}
+
+              {/* Delivery address */}
+              {item.address ? (
+                <Text
+                  variant="caption"
+                  color="muted"
+                  style={{ fontSize: 11, marginBottom: 10 }}
+                  numberOfLines={2}
+                >
+                  📍 {item.address}
+                </Text>
+              ) : null}
 
               {/* Product Items */}
               {item.status !== 'shipping' && (
