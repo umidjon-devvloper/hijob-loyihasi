@@ -10,6 +10,7 @@ import { Text } from '../../src/components/Text';
 import { Logo } from '../../src/components/Logo';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { useAuth } from '../../src/store/auth';
+import { useTryonCollection } from '../../src/store/tryon-collection';
 import { api } from '../../src/api/client';
 import { errorMessage, errorTitle } from '../../src/lib/api-errors';
 
@@ -140,6 +141,7 @@ export default function HomeScreen() {
   const { colors, theme } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
+  const tryonCount = useTryonCollection((s) => s.items.length);
   const lang = i18n.language as 'ru' | 'uz';
 
   const queryClient = useQueryClient();
@@ -290,6 +292,44 @@ export default function HomeScreen() {
           <Logo size={44} />
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              onPress={() => router.push('/(tabs)/tryon' as any)}
+              hitSlop={8}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: colors.surfaceGlass,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: colors.ruleSoft,
+              }}
+            >
+              <Ionicons name="sparkles-outline" size={18} color={colors.ink} />
+              {tryonCount > 0 ? (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -4,
+                    minWidth: 18,
+                    height: 18,
+                    paddingHorizontal: 4,
+                    borderRadius: 9,
+                    backgroundColor: colors.gold,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 2,
+                    borderColor: colors.surface,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.ink }}>
+                    {tryonCount > 9 ? '9+' : String(tryonCount)}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
             <Pressable
               onPress={() => router.push('/search')}
               hitSlop={8}

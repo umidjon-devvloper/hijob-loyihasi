@@ -9,9 +9,12 @@ import { useTheme } from '../../src/theme/ThemeProvider';
 import { api } from '../../src/api/client';
 import { safeBack } from '../../src/lib/safe-back';
 import { formatUsdAsUzs, useUzsRate } from '../../src/lib/currency';
+import { useTryonCollection, TRYON_ALLOWED_CATEGORIES } from '../../src/store/tryon-collection';
 
 interface ProductDetail {
   id: string;
+  sellerId: string;
+  categoryId: string;
   title: { ru: string; uz: string };
   basePriceUsd: number;
   coverUrl: string;
@@ -78,6 +81,11 @@ export default function ProductScreen() {
   // dedicated Primerka tab where the pre-rendered mannequins live. The
   // product page now shows the seller's own product photo so the buyer sees
   // the hijab as photographed, not a face-swapped try-on.
+
+  const addToTryon = useTryonCollection((s) => s.add);
+  const removeFromTryon = useTryonCollection((s) => s.remove);
+  const tryonItems = useTryonCollection((s) => s.items);
+  const inTryon = tryonItems.some((i) => i.productId === id);
 
   const addToCart = useMutation({
     mutationFn: async (variantId: string) => {
@@ -418,35 +426,88 @@ export default function ProductScreen() {
               </View>
             </View>
 
-            {/* Try-On CTA Card */}
+            {/* Try-On CTA Card — gated by category: only clothing goes to Primerka */}
+            {TRYON_ALLOWED_CATEGORIES.has(product.categoryId) && (
+              <Pressable
+                onPress={() => {
+                  if (inTryon) {
+                    removeFromTryon(product.id);
+                  } else {
+                    addToTryon({
+                      productId: product.id,
+                      variantId: product.variants?.[0]?.id ?? null,
+                      sellerId: product.sellerId,
+                      categoryId: product.categoryId,
+                    });
+                  }
+                }}
+                style={{
+                  backgroundColor: inTryon ? colors.gold : colors.oliveDeep,
+                  borderRadius: 16,
+                  padding: 18,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 14,
+                  marginBottom: 10,
+                }}
+              >
+                <Ionicons
+                  name={inTryon ? 'checkmark-circle' : 'sparkles-outline'}
+                  size={30}
+                  color={inTryon ? colors.ink : colors.goldSoft}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    variant="bodySmall"
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: inTryon ? colors.ink : colors.goldSoft,
+                      marginBottom: 3,
+                    }}
+                  >
+                    {inTryon ? 'Primerka ro\'yxatida ✓' : 'Primerka ro\'yxatiga qo\'shish'}
+                  </Text>
+                  <Text
+                    variant="caption"
+                    style={{
+                      fontSize: 12,
+                      color: inTryon ? 'rgba(0,0,0,0.55)' : 'rgba(228,206,154,0.5)',
+                      lineHeight: 16,
+                    }}
+                  >
+                    {inTryon
+                      ? 'Bosib — ro\'yxatdan olib tashlang'
+                      : 'Boshqa do\'konlardagilar bilan birga ko\'ring'}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={inTryon ? 'close' : 'add-circle'}
+                  size={22}
+                  color={inTryon ? colors.ink : colors.goldSoft}
+                />
+              </Pressable>
+            )}
+
+            {/* Open Primerka tab */}
             <Pressable
               onPress={() => router.push('/(tabs)/tryon')}
               style={{
-                backgroundColor: colors.oliveDeep,
-                borderRadius: 16,
-                padding: 18,
+                borderWidth: 1,
+                borderColor: colors.rule,
+                borderRadius: 14,
+                paddingVertical: 12,
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 14,
+                justifyContent: 'center',
+                gap: 8,
                 marginBottom: 22,
               }}
             >
-              <Ionicons name="body-outline" size={36} color={colors.goldSoft} />
-              <View style={{ flex: 1 }}>
-                <Text
-                  variant="bodySmall"
-                  style={{ fontSize: 14, fontWeight: '600', color: colors.goldSoft, marginBottom: 3 }}
-                >
-                  AI bilan kiyib ko'ring
-                </Text>
-                <Text
-                  variant="caption"
-                  style={{ fontSize: 12, color: 'rgba(228,206,154,0.5)', lineHeight: 16 }}
-                >
-                  Sotib olishdan oldin virtual primerka
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.goldSoft} />
+              <Ionicons name="body-outline" size={18} color={colors.ink} />
+              <Text variant="bodySmall" style={{ fontSize: 13, fontWeight: '600', color: colors.ink }}>
+                Primerka xonasini ochish
+              </Text>
             </Pressable>
 
             {/* Description */}

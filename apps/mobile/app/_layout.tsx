@@ -10,6 +10,7 @@ import { ThemeProvider } from '../src/theme/ThemeProvider';
 import { initI18n } from '../src/i18n/i18n';
 import { useAuth } from '../src/store/auth';
 import { useTryonOnboarding } from '../src/store/tryon-onboarding';
+import { useTryonCollection } from '../src/store/tryon-collection';
 import { registerPushToken, attachPushListeners } from '../src/lib/push';
 import { router } from 'expo-router';
 // Side-effect import: patches Alert.alert to be nil-safe (iOS 26 crash fix).
@@ -32,6 +33,7 @@ export default function RootLayout() {
   const hydrate = useAuth((s) => s.hydrate);
   const isAuthed = useAuth((s) => s.isAuthed);
   const hydrateTryon = useTryonOnboarding((s) => s.hydrate);
+  const hydrateTryonCollection = useTryonCollection((s) => s.hydrate);
 
   const [fontsLoaded] = useFonts({
     'PlayfairDisplay': require('../assets/fonts/PlayfairDisplay.ttf'),
@@ -42,7 +44,8 @@ export default function RootLayout() {
     initI18n().then(() => setI18nReady(true));
     hydrate();
     hydrateTryon();
-  }, [hydrate, hydrateTryon]);
+    hydrateTryonCollection();
+  }, [hydrate, hydrateTryon, hydrateTryonCollection]);
 
   useEffect(() => {
     if (fontsLoaded && i18nReady) SplashScreen.hideAsync().catch(() => {});

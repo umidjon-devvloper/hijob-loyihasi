@@ -11,6 +11,7 @@ import { useTheme } from '../../src/theme/ThemeProvider';
 import { api } from '../../src/api/client';
 import { errorMessage, errorTitle } from '../../src/lib/api-errors';
 import { useTryonOnboarding, type BodyType } from '../../src/store/tryon-onboarding';
+import { useTryonCollection, TRYON_ALLOWED_CATEGORIES } from '../../src/store/tryon-collection';
 
 interface Variant {
   id: string;
@@ -28,6 +29,7 @@ interface Variant {
 interface Product {
   id: string;
   sellerId: string;
+  categoryId?: string;
   title: { ru: string; uz: string; en?: string };
   basePriceUsd: number;
   coverUrl: string;
@@ -89,6 +91,39 @@ export default function TryOnScreen() {
     }, [tryonHydrated, tryonCompleted, router]),
   );
 
+  // Items the buyer collected across different shops. Only clothing
+  // categories are accepted at add time (bags/accessories can't be worn
+  // on a mannequin), so no further filtering is needed here.
+  const collectionItems = useTryonCollection((s) => s.items);
+  const removeFromCollection = useTryonCollection((s) => s.remove);
+  const productIds = useMemo(() => collectionItems.map((i) => i.productId), [collectionItems]);
+
+  // Fetch each collected product. We hit the detail endpoint in parallel
+  // because the list endpoint has no "ids in" filter today — the collection
+  // is capped by UI (10-20 items) so this is cheap.
+  const collectionQuery = useQuery<Product[]>({
+    queryKey: ['tryon-collection-products', productIds.join(',')],
+    queryFn: async () => {
+      if (productIds.length === 0) return [];
+      const results = await Promise.all(
+        productIds.map(async (pid) => {
+          try {
+            const { data } = await api.get(`/catalog/products/${pid}`);
+            return data as Product;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return results.filter((p): p is Product => !!p);
+    },
+    enabled: !!tryonCompleted && productIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  // Legacy single-store catalogue: only used as a fallback when the
+  // collection is empty, so the Primerka tab still shows the chosen
+  // store's items on first visit.
   const productsQuery = useQuery<{ items: Product[] }>({
     queryKey: ['tryon-store-products', storeId],
     queryFn: async () =>
@@ -97,9 +132,21 @@ export default function TryOnScreen() {
           params: { sellerId: storeId, pageSize: 30 },
         })
       ).data,
-    enabled: !!tryonCompleted && !!storeId,
+    enabled: !!tryonCompleted && !!storeId && productIds.length === 0,
   });
-  const products = productsQuery.data?.items ?? [];
+
+  const products = useMemo(() => {
+    if ((collectionQuery.data?.length ?? 0) > 0) {
+      // Only clothing categories make sense here; the store already filters,
+      // but legacy items may have slipped through.
+      return (collectionQuery.data ?? []).filter((p) =>
+        TRYON_ALLOWED_CATEGORIES.has((p as any).categoryId ?? 'scarves'),
+      );
+    }
+    return (productsQuery.data?.items ?? []).filter((p) =>
+      TRYON_ALLOWED_CATEGORIES.has((p as any).categoryId ?? 'scarves'),
+    );
+  }, [collectionQuery.data, productsQuery.data]);
 
   const wishlistQuery = useQuery<Array<{ productId: string }>>({
     queryKey: ['wishlist'],
