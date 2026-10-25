@@ -36,9 +36,11 @@ const STORE_COLORS = ['#C9A96E', '#8A8D5B', '#B85450', '#5F7A94', '#D9A24B'];
 // the app so there's no network dependency and the layout matches cross-
 // platform. Slug → scarf type mapping mirrors apps/website/src/lib/categories.ts.
 const CATEGORY_DATA = [
-  { id: 'scarves', image: require('../../assets/category-pashmina.webp') },
+  // Scarves ↔ bags images were swapped — pashmina.webp actually shows a
+  // bag and shifon.webp shows a hijab head, so re-point them here.
+  { id: 'scarves', image: require('../../assets/category-shifon.webp') },
   { id: 'dresses', image: require('../../assets/category-dresses.webp') },
-  { id: 'bags', image: require('../../assets/category-shifon.webp') },
+  { id: 'bags', image: require('../../assets/category-pashmina.webp') },
   { id: 'accessories', image: require('../../assets/category-accessories.webp') },
 ] as const;
 
