@@ -120,7 +120,7 @@ export class StyleJobsService {
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 200),
       include: {
-        product: { select: { titleRu: true } },
+        product: { select: { titleRu: true, categoryId: true } },
         seller: { select: { brandName: true } },
       },
     });

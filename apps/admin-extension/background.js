@@ -359,7 +359,71 @@ async function loadScene() {
   }
 }
 
-function buildPrompt(job) {
+// ─── Shared prompt building blocks ─────────────────────────────────────
+//
+// Every category produces the same 3x3 grid structure (the content-script
+// slicer only works if gutters, cell count and chroma backdrop are fixed),
+// so grid + model identity + chroma rules are shared helpers. Each
+// category function only varies the garment/accessory description, the
+// pose detail and the reference-image line.
+
+const GRID_ROWS_COLS = [
+  'ARRANGE them in a 3×3 grid (3 rows × 3 columns), SAME baseline per row, SAME lighting, equal gaps between cells, EQUAL cell size so the image can be cut cleanly into 9 pieces.',
+  '',
+  'ROWS = body type (top → bottom):',
+  '  • Row 1 — SLIM: narrow shoulders and waist, overall thin frame',
+  '  • Row 2 — MEDIUM: average healthy proportions',
+  '  • Row 3 — FULL: wider hips, fuller waist, plus-size figure',
+  '',
+  'COLUMNS = height band (left → right, within each row):',
+  '  • Col 1 — SHORT (~150-160 cm)',
+  '  • Col 2 — MID   (~161-170 cm)',
+  '  • Col 3 — TALL  (~171-185 cm)',
+];
+
+const FULL_BODY_SHOT = 'Each cell is a HEAD-TO-TOE full-body shot — the ENTIRE model must be visible from the top of the head all the way DOWN TO THE FEET; feet inside the frame; model centered in her cell.';
+
+function gridGutters(chroma) {
+  const colorWord = chroma.name.toLowerCase().split(' ').pop();
+  return [
+    'GRID GUTTERS (CRITICAL — the image is auto-sliced into 9 cells):',
+    `• Leave a VISIBLE EMPTY ${colorWord} HORIZONTAL BAND between rows 1↔2 and between rows 2↔3. Each band is pure ${chroma.hex}, FULL IMAGE WIDTH, and roughly 2.5% of the TOTAL image height tall. No part of any model crosses into these bands.`,
+    `• Leave a VISIBLE EMPTY ${colorWord} VERTICAL BAND between columns 1↔2 and between columns 2↔3. Each band is pure ${chroma.hex}, FULL IMAGE HEIGHT, and roughly 2.5% of the TOTAL image width wide.`,
+    '• The 9 cells are the regions BETWEEN those bands. Every model stays entirely inside her own cell with ~8% empty space above her head and ~6% empty space below her shoes; nothing crosses the gutter bands.',
+  ];
+}
+
+const COMMON_MODEL_IDENTITY = [
+  'Model (every cell):',
+  '• Realistic young woman fashion model, photoreal skin and natural look — NOT a plastic mannequin. Realistic proportions head to feet.',
+  '• Natural, friendly face — soft gentle closed-mouth smile, eyes open and looking at the camera. Head turned at most slightly so BOTH eyes stay fully visible (the face is replaced later).',
+  '• SAME face identity across all 9 cells (same woman, ~25 years old, light-tan skin, soft warm light on the face).',
+  '• Face is clearly visible — not hidden, not shadowed, no sunglasses, no mask.',
+  '• Realistic proportions, head to feet (head, neck, shoulders, chest, waist, hips, thighs, knees, calves and ankles).',
+];
+
+function commonBackground(chroma, garmentWord = 'garment') {
+  const colorWord = chroma.name.toLowerCase().split(' ').pop();
+  const parenNote = chroma.hex === '#00B140' ? '(bright chroma green)' : '(bright chroma magenta)';
+  return [
+    `Background (CRITICAL — the mobile app draws its OWN boutique scene behind every mannequin, so this image must NOT contain any scene, room, or dark colour that could ever appear on the ${garmentWord}):`,
+    `• Behind every model draw a SOLID FLAT ${chroma.name} SCREEN — fill every non-model pixel with ${chroma.hex} ${parenNote}. The same flat colour fills EVERY pixel that is not part of the model herself — no gradient, no texture, no vignette, no scene, no ground.`,
+    `• NOTHING on the model or her ${garmentWord} may be ${colorWord} — that colour is reserved for the chroma backdrop and will be made transparent later. A dark or black backdrop would swallow dark fabrics, so this bright chroma is deliberate.`,
+    `• Replace the 2.5 % black gutter bars BETWEEN cells (described above) with equally thick ${chroma.hex} bars so the whole non-model area is a single flat chroma colour — the slicer still finds the cut lines by their distance from the figures.`,
+    '• Soft, even studio lighting on the figures so they composite cleanly later; no cast shadow on the ground.',
+    '• NO text, NO labels, NO rulers, NO watermarks, NO logos.',
+  ];
+}
+
+function finalOutput(chroma) {
+  return `Output ONE OPAQUE image (JPEG or PNG without alpha), square or 4:5 portrait, containing all 9 full-body models on the flat ${chroma.name} chroma backdrop arranged in a clean 3×3 grid ready for mechanical cutting. Do NOT use transparency.`;
+}
+
+// ─── Category-specific prompts ─────────────────────────────────────────
+
+// Hijab / scarves — EXACT original wording, kept byte-for-byte identical
+// to the pre-refactor prompt so quality on the main category never drifts.
+function buildScarfPrompt(job) {
   const chroma = chromaFor(job.colorHex);
   const style =
     job.tyingStyle === 'loose' ? 'loose, flowing drape style' :
@@ -424,6 +488,169 @@ function buildPrompt(job) {
     '',
     `Output ONE OPAQUE image (JPEG or PNG without alpha), square or 4:5 portrait, containing all 9 full-body models on the flat ${chroma.name} chroma backdrop arranged in a clean 3×3 grid ready for mechanical cutting. Do NOT use transparency.`,
   ].join('\n');
+}
+
+function buildDressPrompt(job) {
+  const chroma = chromaFor(job.colorHex);
+  const sizeLine = job.targetSize
+    ? `Dress size: ${job.targetSize} — tailor the fit to this size's silhouette in every cell.`
+    : 'Dress size: standard — natural tailored fit in every cell.';
+  return [
+    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING THE SAME DRESS from the attached reference image.',
+    '',
+    ...GRID_ROWS_COLS,
+    '',
+    `Primary color accent: ${job.colorHex}.`,
+    sizeLine,
+    '',
+    FULL_BODY_SHOT,
+    '',
+    ...gridGutters(chroma),
+    '',
+    ...COMMON_MODEL_IDENTITY,
+    '• Head covered with a plain neutral SOFT BEIGE / CREAM hijab (#e8dcc6), simply draped around the head, shoulders and chest. This hijab is NOT the product — it is only there to cover the head modestly. Keep it plain, no pattern.',
+    '• Plain BEIGE closed flat shoes on the feet — no bare feet (unless the dress itself has an integrated shoe/leg detail).',
+    '',
+    'Dress (every cell — the PRODUCT being showcased):',
+    '• Use the attached DRESS image as the garment reference — preserve its colour, pattern, fabric texture, neckline, sleeves, length and silhouette EXACTLY in every one of the 9 cells.',
+    '• The model wears the dress as the primary visible garment, covering her from the neckline shown in the reference down to the hem shown in the reference.',
+    '• If the dress is sleeveless, add a plain beige modest under-layer (long-sleeve top in #e8dcc6) so the arms remain covered — but the dress itself stays on top and fully visible.',
+    '• Dress fully visible from neckline to hem; no hands or hijab covering the dress pattern.',
+    '',
+    'Pose (SAME in every cell) — relaxed boutique fitting-room pose like a fashion catalogue photo:',
+    '• Body turned about 20° to the side (three-quarter view), face turned back toward the camera.',
+    '• Weight on one leg, the other knee softly relaxed; shoulders soft; elegant posture that shows the dress silhouette clearly.',
+    '• Both arms relaxed along the body (NOT crossed in front of the dress, NOT holding anything in front of the dress).',
+    '• Elbows and hands stay close to the body so the whole figure fits inside its own cell and the dress is unobstructed.',
+    '',
+    ...commonBackground(chroma, 'dress'),
+    '',
+    finalOutput(chroma),
+  ].join('\n');
+}
+
+function buildBagPrompt(job) {
+  const chroma = chromaFor(job.colorHex);
+  return [
+    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each HOLDING / CARRYING THE SAME BAG from the attached reference image.',
+    '',
+    ...GRID_ROWS_COLS,
+    '',
+    `Primary color accent: ${job.colorHex}.`,
+    '',
+    FULL_BODY_SHOT,
+    '',
+    ...gridGutters(chroma),
+    '',
+    ...COMMON_MODEL_IDENTITY,
+    '• Head covered with a plain neutral SOFT BEIGE / CREAM hijab (#e8dcc6), simple drape — not patterned.',
+    '• FULLY MODEST OUTFIT: plain SOFT BEIGE / CREAM long-sleeve ankle-length dress (abaya-like simple gown in warm beige #e8dcc6, NOT white). The outfit is deliberately plain so the BAG is the hero.',
+    '• Plain BEIGE closed flat shoes.',
+    '',
+    'Bag (every cell — the PRODUCT being showcased):',
+    '• Use the attached BAG image as the reference — preserve its colour, material, shape, hardware, strap style and proportions EXACTLY in every one of the 9 cells.',
+    '• Position the bag so it is CLEARLY visible and unobstructed. For shoulder/crossbody bags: strap on the shoulder, bag resting at hip level on the front-facing side. For handbags/clutches: held in the near hand at waist level in front of the body. For backpacks: both straps on shoulders, bag visible via a slight side turn.',
+    '• The bag silhouette stays sharp — no fingers or sleeves cutting across the hardware or logo area.',
+    '',
+    'Pose (SAME in every cell) — relaxed boutique pose that frames the bag:',
+    '• Body turned about 20° to the side (three-quarter view), face turned back toward the camera.',
+    '• Weight on one leg, posture elegant.',
+    '• One hand gently resting on the bag (strap, handle or body of the bag — depending on bag type) at a natural height; the other arm relaxed along the body.',
+    '• Elbows close to the body so the whole figure plus the bag fits inside its cell.',
+    '',
+    ...commonBackground(chroma, 'bag'),
+    '',
+    finalOutput(chroma),
+  ].join('\n');
+}
+
+function buildShoePrompt(job) {
+  const chroma = chromaFor(job.colorHex);
+  return [
+    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING THE SAME PAIR OF SHOES from the attached reference image.',
+    '',
+    ...GRID_ROWS_COLS,
+    '',
+    `Primary color accent: ${job.colorHex}.`,
+    '',
+    FULL_BODY_SHOT,
+    '• Camera framing in every cell makes BOTH SHOES clearly visible — do not crop at the ankle; include the ground line.',
+    '',
+    ...gridGutters(chroma),
+    '',
+    ...COMMON_MODEL_IDENTITY,
+    '• Head covered with a plain neutral SOFT BEIGE / CREAM hijab (#e8dcc6).',
+    '• FULLY MODEST OUTFIT: plain SOFT BEIGE / CREAM mid-calf length dress or ankle-length dress with the HEM clearly ABOVE the shoes so the full shoe is visible (abaya-like simple gown in warm beige #e8dcc6, NOT white, hem at mid-calf OR shin so shoes show in full).',
+    '',
+    'Shoes (every cell — the PRODUCT being showcased):',
+    '• Use the attached SHOES image as the reference — preserve the exact colour, material, heel height, shape, strap and sole EXACTLY in every one of the 9 cells.',
+    '• Both shoes clearly visible on the model\'s feet; one foot slightly forward in a soft contrapposto so the side profile of the shoe reads clearly.',
+    '• Shoes rest on an invisible ground inside the chroma backdrop — no shadow, no reflection.',
+    '',
+    'Pose (SAME in every cell) — relaxed boutique pose that frames the shoes:',
+    '• Body turned about 20° to the side (three-quarter view), face turned back toward the camera.',
+    '• Weight on one leg, the other foot slightly forward and turned ~15° outward so the shoe profile is readable.',
+    '• Both arms relaxed along the body.',
+    '',
+    ...commonBackground(chroma, 'shoes'),
+    '',
+    finalOutput(chroma),
+  ].join('\n');
+}
+
+function buildAccessoryPrompt(job) {
+  const chroma = chromaFor(job.colorHex);
+  return [
+    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING / DISPLAYING THE SAME ACCESSORY from the attached reference image.',
+    '',
+    ...GRID_ROWS_COLS,
+    '',
+    `Primary color accent: ${job.colorHex}.`,
+    '',
+    FULL_BODY_SHOT,
+    '',
+    ...gridGutters(chroma),
+    '',
+    ...COMMON_MODEL_IDENTITY,
+    '• Head covered with a plain neutral SOFT BEIGE / CREAM hijab (#e8dcc6).',
+    '• FULLY MODEST OUTFIT: plain SOFT BEIGE / CREAM long-sleeve ankle-length dress (#e8dcc6, NOT white). The outfit is deliberately plain so the ACCESSORY is the hero.',
+    '• Plain BEIGE closed flat shoes.',
+    '',
+    'Accessory (every cell — the PRODUCT being showcased):',
+    '• Use the attached ACCESSORY image as the reference — preserve its colour, material, texture, shape and proportions EXACTLY in every one of the 9 cells.',
+    '• Place the accessory where it would naturally be worn, chosen by what it is:',
+    '    – Brooch / pin → pinned on the hijab at shoulder level, visible.',
+    '    – Belt / sash → around the waist over the dress, buckle centered.',
+    '    – Earrings → visible beside the face through a soft hair-tuck or hijab opening (very subtle, the accessory is small).',
+    '    – Necklace → draped over the dress neckline, fully visible.',
+    '    – Watch / bracelet → on the near wrist, that hand slightly lifted at waist height so the piece reads.',
+    '    – Scarf-pin or clip → clipped on the front drape of the hijab.',
+    '• If the accessory type is ambiguous from the reference image, pick the single most natural placement from the list above and keep it consistent across all 9 cells.',
+    '',
+    'Pose (SAME in every cell) — relaxed boutique pose that frames the accessory:',
+    '• Body turned about 20° to the side (three-quarter view), face toward camera.',
+    '• Pose adjusted so the accessory location is unobstructed (e.g. hands away from a brooch, near wrist slightly lifted for a bracelet).',
+    '• Elbows close to the body so the whole figure fits inside its cell.',
+    '',
+    ...commonBackground(chroma, 'accessory'),
+    '',
+    finalOutput(chroma),
+  ].join('\n');
+}
+
+// Dispatcher — picks the right category prompt from product.categoryId.
+// Falls back to scarves (the historical default) when the field is missing
+// so old queued jobs keep rendering with the same prompt they would have.
+function buildPrompt(job) {
+  const category = job.product?.categoryId;
+  switch (category) {
+    case 'dresses':     return buildDressPrompt(job);
+    case 'bags':        return buildBagPrompt(job);
+    case 'shoes':       return buildShoePrompt(job);
+    case 'accessories': return buildAccessoryPrompt(job);
+    case 'scarves':
+    default:            return buildScarfPrompt(job);
+  }
 }
 
 // ─── Per-task runner ───────────────────────────────────────────────────
