@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { FlatList, Image, Pressable, RefreshControl, TextInput, View } from 'react-native';
+import { Alert, FlatList, Image, Pressable, RefreshControl, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../src/components/Screen';
@@ -52,6 +52,85 @@ export default function SellerProductsScreen() {
   const L = (uz: string, ru: string, en: string, ar: string) => ({ uz, ru, en, ar }[lang] ?? uz);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
+  const queryClient = useQueryClient();
+
+  const openProductMenu = (item: SellerProduct) => {
+    Alert.alert(
+      item.titleRu || item.titleUz || L('Mahsulot', 'Товар', 'Product', 'منتج'),
+      L('Nima qilmoqchisiz?', 'Что хотите сделать?', 'What would you like to do?', 'ماذا تريد أن تفعل؟'),
+      [
+        {
+          text: L('Ko\'rish', 'Открыть', 'Open', 'فتح'),
+          onPress: () => router.push(`/seller/product/${item.id}` as any),
+        },
+        {
+          text: L('Tahrirlash', 'Редактировать', 'Edit', 'تعديل'),
+          onPress: () => promptEdit(item),
+        },
+        {
+          text: L('O\'chirish', 'Удалить', 'Delete', 'حذف'),
+          style: 'destructive',
+          onPress: () => confirmDelete(item),
+        },
+        { text: L('Bekor', 'Отмена', 'Cancel', 'إلغاء'), style: 'cancel' },
+      ],
+    );
+  };
+
+  const promptEdit = (item: SellerProduct) => {
+    Alert.prompt?.(
+      L('Narx (USD)', 'Цена (USD)', 'Price (USD)', 'السعر (USD)'),
+      L('Yangi narxni kiriting', 'Введите новую цену', 'Enter the new price', 'أدخل السعر الجديد'),
+      [
+        { text: L('Bekor', 'Отмена', 'Cancel', 'إلغاء'), style: 'cancel' },
+        {
+          text: L('Saqlash', 'Сохранить', 'Save', 'حفظ'),
+          onPress: async (value?: string) => {
+            const price = Number(value);
+            if (!value || Number.isNaN(price) || price <= 0) {
+              Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), L('Narx noto\'g\'ri', 'Неверная цена', 'Invalid price', 'سعر غير صحيح'));
+              return;
+            }
+            try {
+              await api.patch(`/seller/products/${item.id}`, { basePriceUsd: price });
+              await queryClient.invalidateQueries({ queryKey: ['seller', 'products'] });
+            } catch (e: any) {
+              Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), e?.response?.data?.message ?? e?.message ?? 'xatolik');
+            }
+          },
+        },
+      ],
+      'plain-text',
+      String(item.basePriceUsd),
+    );
+  };
+
+  const confirmDelete = (item: SellerProduct) => {
+    Alert.alert(
+      L('O\'chirishni tasdiqlang', 'Подтвердите удаление', 'Confirm deletion', 'تأكيد الحذف'),
+      L(
+        'Bu mahsulot katalogdan olib tashlanadi. Bekor qilib bo\'lmaydi.',
+        'Товар будет убран из каталога. Отменить нельзя.',
+        'This product will be removed from the catalog. Cannot be undone.',
+        'سيتم إزالة المنتج من الكتالوج. لا يمكن التراجع.',
+      ),
+      [
+        { text: L('Bekor', 'Отмена', 'Cancel', 'إلغاء'), style: 'cancel' },
+        {
+          text: L('O\'chirish', 'Удалить', 'Delete', 'حذف'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/seller/products/${item.id}`);
+              await queryClient.invalidateQueries({ queryKey: ['seller', 'products'] });
+            } catch (e: any) {
+              Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), e?.response?.data?.message ?? e?.message ?? 'xatolik');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   // Backend returns the full list; we filter client-side so switching tabs
   // is instant and the badge counts stay in sync with real data.
@@ -200,6 +279,8 @@ export default function SellerProductsScreen() {
           return (
             <Pressable
               onPress={() => router.push(`/seller/product/${item.id}` as any)}
+              onLongPress={() => openProductMenu(item)}
+              delayLongPress={300}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -290,7 +371,16 @@ export default function SellerProductsScreen() {
                   </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  openProductMenu(item);
+                }}
+                hitSlop={10}
+                style={{ padding: 6, marginLeft: 2 }}
+              >
+                <Ionicons name="ellipsis-vertical" size={18} color={colors.muted} />
+              </Pressable>
             </Pressable>
           );
         }}

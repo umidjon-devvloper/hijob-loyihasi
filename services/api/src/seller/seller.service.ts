@@ -471,6 +471,44 @@ export class SellerService {
     };
   }
 
+  async updateProduct(
+    userId: string,
+    productId: string,
+    dto: { titleUz?: string; titleRu?: string; basePriceUsd?: number; descriptionUz?: string; descriptionRu?: string },
+  ) {
+    const seller = await this.requireSeller(userId);
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException('PRODUCT_NOT_FOUND');
+    if (product.sellerId !== seller.id) throw new ForbiddenException('NOT_YOUR_PRODUCT');
+
+    const updated = await this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        ...(dto.titleUz !== undefined && { titleUz: dto.titleUz }),
+        ...(dto.titleRu !== undefined && { titleRu: dto.titleRu }),
+        ...(dto.basePriceUsd !== undefined && { basePriceUsd: dto.basePriceUsd }),
+        ...(dto.descriptionUz !== undefined && { descriptionUz: dto.descriptionUz }),
+        ...(dto.descriptionRu !== undefined && { descriptionRu: dto.descriptionRu }),
+      },
+    });
+    return { id: updated.id, status: updated.status };
+  }
+
+  async deleteProduct(userId: string, productId: string) {
+    const seller = await this.requireSeller(userId);
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException('PRODUCT_NOT_FOUND');
+    if (product.sellerId !== seller.id) throw new ForbiddenException('NOT_YOUR_PRODUCT');
+
+    // Soft delete: flip to archived so order history, saved items and
+    // style jobs don't break with FK violations.
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: { status: ProductStatus.archived },
+    });
+    return { ok: true };
+  }
+
   async submit(userId: string, productId: string) {
     const seller = await this.requireSeller(userId);
     const product = await this.prisma.product.findUnique({ where: { id: productId } });

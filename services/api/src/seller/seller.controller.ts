@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -83,6 +84,23 @@ export class SellerController {
   @Post('products')
   create(@CurrentUser() user: CurrentUserInfo, @Body() dto: CreateProductDto) {
     return this.seller.createProduct(user.id, dto);
+  }
+
+  @Patch('products/:id')
+  updateProduct(
+    @CurrentUser() user: CurrentUserInfo,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: { titleUz?: string; titleRu?: string; basePriceUsd?: number; descriptionUz?: string; descriptionRu?: string },
+  ) {
+    return this.seller.updateProduct(user.id, id, body);
+  }
+
+  @Delete('products/:id')
+  deleteProduct(
+    @CurrentUser() user: CurrentUserInfo,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.seller.deleteProduct(user.id, id);
   }
 
   @Post('products/:id/submit')
