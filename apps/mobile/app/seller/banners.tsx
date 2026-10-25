@@ -55,6 +55,12 @@ export default function SellerBannersScreen() {
     queryFn: async () => (await api.get<Banner[]>('/seller/banners')).data,
   });
 
+  const subscriptionQ = useQuery<{ isActive: boolean }>({
+    queryKey: ['seller-subscription'],
+    queryFn: async () => (await api.get('/seller/subscription')).data,
+  });
+  const subscriptionActive = subscriptionQ.data?.isActive ?? false;
+
   const saveMutation = useMutation({
     mutationFn: async (dto: Partial<Banner>) => {
       if (dto.id) {
@@ -123,6 +129,37 @@ export default function SellerBannersScreen() {
         </View>
 
         <View style={{ paddingHorizontal: 20 }}>
+          {!subscriptionActive && (
+            <View style={{
+              padding: 14, marginBottom: 14, borderRadius: 14,
+              borderWidth: 1, borderColor: colors.gold,
+              backgroundColor: 'rgba(201, 169, 110, 0.08)',
+              flexDirection: 'row', gap: 10, alignItems: 'flex-start',
+            }}>
+              <Ionicons name="lock-closed" size={18} color={colors.gold} style={{ marginTop: 2 }} />
+              <View style={{ flex: 1 }}>
+                <Text variant="body" style={{ color: colors.ink, fontWeight: '700', fontSize: 13 }}>
+                  {L('Obuna kerak', 'Нужна подписка', 'Subscription required', 'الاشتراك مطلوب')}
+                </Text>
+                <Text variant="caption" color="muted" style={{ fontSize: 12, marginTop: 2, lineHeight: 17 }}>
+                  {L(
+                    "Banner yaratish va bosh sahifaga chiqarish — obunachilar uchun. Avval obunani faollashtiring.",
+                    'Создание баннеров доступно только по подписке. Активируйте подписку, чтобы продолжить.',
+                    'Banner creation is a subscriber feature. Activate your subscription to continue.',
+                    'إنشاء اللافتات متاح للمشتركين. فعّل اشتراكك للمتابعة.'
+                  )}
+                </Text>
+                <Pressable
+                  onPress={() => router.push('/seller/subscription')}
+                  style={{ marginTop: 8, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.gold }}
+                >
+                  <Text variant="caption" style={{ fontSize: 11, color: colors.oliveDeep, fontWeight: '700' }}>
+                    {L('Obunaga o\'tish', 'Открыть подписку', 'Open subscription', 'فتح الاشتراك')}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
           <Text variant="caption" color="muted" style={{ fontSize: 12, marginBottom: 16, lineHeight: 18 }}>
             {L(
               'Siz tayyor shablonlardan foydalanishingiz yoki o\'z rasm yuklashingiz mumkin. Admin tasdiqlagandan keyin banner bosh sahifada ko\'rinadi.',
@@ -199,11 +236,36 @@ export default function SellerBannersScreen() {
           )}
 
           <Pressable
-            onPress={() => setEditing({})}
-            style={{ marginTop: 8, padding: 16, borderRadius: 14, backgroundColor: colors.oliveDeep, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            onPress={() => {
+              if (!subscriptionActive) {
+                Alert.alert(
+                  L('Obuna kerak', 'Нужна подписка', 'Subscription required', 'الاشتراك مطلوب'),
+                  L(
+                    'Banner yaratish uchun avval obunani faollashtiring.',
+                    'Чтобы создать баннер, активируйте подписку.',
+                    'Activate your subscription to create a banner.',
+                    'فعّل اشتراكك لإنشاء لافتة.'
+                  ),
+                  [
+                    { text: L('Bekor', 'Отмена', 'Cancel', 'إلغاء'), style: 'cancel' },
+                    { text: L('Obunaga o\'tish', 'К подписке', 'Open subscription', 'فتح الاشتراك'), onPress: () => router.push('/seller/subscription') },
+                  ],
+                );
+                return;
+              }
+              setEditing({});
+            }}
+            style={{
+              marginTop: 8, padding: 16, borderRadius: 14,
+              backgroundColor: subscriptionActive ? colors.oliveDeep : colors.surface2,
+              borderWidth: subscriptionActive ? 0 : 1,
+              borderColor: colors.rule,
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+              opacity: subscriptionActive ? 1 : 0.6,
+            }}
           >
-            <Ionicons name="add-circle" size={20} color={colors.goldSoft} />
-            <Text variant="body" style={{ color: colors.goldSoft, fontWeight: '700', fontSize: 15 }}>
+            <Ionicons name={subscriptionActive ? 'add-circle' : 'lock-closed'} size={20} color={subscriptionActive ? colors.goldSoft : colors.muted} />
+            <Text variant="body" style={{ color: subscriptionActive ? colors.goldSoft : colors.muted, fontWeight: '700', fontSize: 15 }}>
               {L('Yangi banner', 'Новый баннер', 'New banner', 'لافتة جديدة')}
             </Text>
           </Pressable>

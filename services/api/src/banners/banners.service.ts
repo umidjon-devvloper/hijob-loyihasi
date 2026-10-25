@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 interface UpsertBannerInput {
   templateId?: string | null;
@@ -16,7 +17,24 @@ interface UpsertBannerInput {
 export class BannersService {
   private readonly logger = new Logger(BannersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly subs: SubscriptionsService,
+  ) {}
+
+  /**
+   * TZ Phase 7 — banner creation and activation are a paid-subscription
+   * feature. Admins bypass this so they can seed demo rows. Sellers get
+   * a 403 PAYMENT_REQUIRED-like refusal until their subscription is
+   * active, with the error code the mobile client surfaces as "Obuna
+   * yoqilishi kerak".
+   */
+  private async requireActiveSubscription(sellerId: string) {
+    const active = await this.subs.isSellerActive(sellerId);
+    if (!active) {
+      throw new ForbiddenException('SUBSCRIPTION_REQUIRED');
+    }
+  }
 
   // ─── Templates (public read, admin write) ──────────────────────
 
@@ -73,6 +91,7 @@ export class BannersService {
 
   async createMine(userId: string, dto: UpsertBannerInput) {
     const seller = await this.requireSeller(userId);
+    await this.requireActiveSubscription(seller.id);
     if (!dto.templateId && !dto.customImageUrl) {
       throw new BadRequestException('TEMPLATE_OR_IMAGE_REQUIRED');
     }
@@ -98,6 +117,12 @@ export class BannersService {
     const seller = await this.requireSeller(userId);
     const row = await this.prisma.sellerBanner.findUnique({ where: { id } });
     if (!row || row.sellerId !== seller.id) throw new NotFoundException('BANNER_NOT_FOUND');
+    // Turning a banner ON requires an active subscription; turning it OFF
+    // is always allowed so a seller whose plan expires can still hide
+    // their banner without being blocked.
+    if (dto.isActive === true) {
+      await this.requireActiveSubscription(seller.id);
+    }
     return this.prisma.sellerBanner.update({
       where: { id },
       data: {
@@ -151,6 +176,15 @@ export class BannersService {
       where: {
         isActive: true,
         isApproved: true,
+        // Only sellers whose paid subscription is active right now.
+        seller: {
+          subscriptions: {
+            some: {
+              status: 'active',
+              endAt: { gt: now },
+            },
+          },
+        },
         OR: [
           { startAt: null, endAt: null },
           { startAt: { lte: now }, endAt: null },
