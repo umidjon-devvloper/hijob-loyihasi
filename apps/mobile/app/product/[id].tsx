@@ -439,6 +439,11 @@ export default function ProductScreen() {
                       sellerId: product.sellerId,
                       categoryId: product.categoryId,
                     });
+                    // Fire-and-forget: make sure the backend has queued a
+                    // face-render job for every variant of this product, in
+                    // case the seller published it after the buyer onboarded
+                    // and the fanout job missed them.
+                    api.post(`/tryon/enqueue-product/${product.id}`).catch(() => {});
                   }
                 }}
                 style={{

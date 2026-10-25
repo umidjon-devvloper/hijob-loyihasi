@@ -3,6 +3,8 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  ParseUUIDPipe,
   Post,
   UploadedFile,
   UseGuards,
@@ -74,5 +76,22 @@ export class UserFaceRendersController {
   @UseGuards(JwtAuthGuard)
   myRenders(@CurrentUser() user: CurrentUserInfo) {
     return this.svc.statusForUser(user.id);
+  }
+
+  /**
+   * Belt-and-suspenders: mobile calls this when the buyer adds a product
+   * to their Primerka collection. If the product's variants are already
+   * covered by a done render or an open job this is a no-op; otherwise
+   * the missing variants are queued so the Primerka tab shows the
+   * face-swapped mannequin within a few seconds of the buyer opening it.
+   */
+  @Post('enqueue-product/:id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  enqueueProduct(
+    @CurrentUser() user: CurrentUserInfo,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.svc.enqueueForProduct(user.id, id).then((queued) => ({ queued }));
   }
 }

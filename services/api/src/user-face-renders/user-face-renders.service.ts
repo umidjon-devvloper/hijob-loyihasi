@@ -173,6 +173,56 @@ export class UserFaceRendersService {
   }
 
   /**
+   * Belt-and-suspenders: when the buyer adds a product to their Primerka
+   * collection, make sure every one of its variants has either a done
+   * render or an open job. Covers the edge case where the buyer onboarded
+   * before this product was published and the seller's fanout missed
+   * them. Idempotent — zero work when everything is already queued.
+   */
+  async enqueueForProduct(userId: string, productId: string): Promise<number> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { selfieKey: true },
+    });
+    // No selfie means the user hasn't finished onboarding; the Primerka
+    // tab will trigger that flow on open, so there is nothing to queue.
+    if (!user?.selfieKey) return 0;
+
+    const variants = await this.prisma.productVariant.findMany({
+      where: { productId, product: { status: ProductStatus.published } },
+      select: { id: true },
+    });
+    if (!variants.length) return 0;
+
+    const variantIds = variants.map((v) => v.id);
+    const [done, open] = await Promise.all([
+      this.prisma.userFaceRender.findMany({
+        where: { userId, variantId: { in: variantIds } },
+        select: { variantId: true },
+      }),
+      this.prisma.userFaceRenderJob.findMany({
+        where: { userId, variantId: { in: variantIds } },
+        select: { variantId: true },
+      }),
+    ]);
+    const covered = new Set([
+      ...done.map((r) => r.variantId),
+      ...open.map((r) => r.variantId),
+    ]);
+    const toQueue = variantIds.filter((id) => !covered.has(id));
+    if (!toQueue.length) return 0;
+
+    await this.prisma.userFaceRenderJob.createMany({
+      data: toQueue.map((variantId) => ({ userId, variantId })),
+      skipDuplicates: true,
+    });
+    this.logger.log(
+      `on-demand enqueue for product ${productId}, user ${userId}: ${toQueue.length} job(s)`,
+    );
+    return toQueue.length;
+  }
+
+  /**
    * Fan-out helper for the catalog side: when a seller approves a style job
    * and the product goes from draft to published, every onboarded buyer
    * needs a face-swapped render for its variants. Enqueues one job per
