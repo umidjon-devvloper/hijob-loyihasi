@@ -453,31 +453,31 @@ export default function TryOnScreen() {
             </View>
           ) : (
             <>
-              {hero && (
-                // Scene renders already bake in the fitting-room so they must
-                // fill the card completely — otherwise the asset backdrop
-                // peeks around the figure and we get a double boutique.
-                // Plain product photos keep the padded placement so the real
-                // backdrop shows around them.
-                <Image
-                  source={{ uri: hero.uri }}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                  }}
-                  // Composite is 3:4 but the hero card flexes to fill
-                  // whatever height is left after the chips + thumbs
-                  // strip; `contain` keeps the whole figure (head +
-                  // feet) visible, and the FITTING_ROOM backdrop drawn
-                  // behind this Image fills the matte bands with the
-                  // same boutique scene so the padding reads as part of
-                  // the room, not an empty frame.
-                  resizeMode="contain"
-                />
-              )}
+              {hero && (() => {
+                // Scarves: zoom into the head/scarf area so the hijab fills
+                // the frame like a studio portrait (matches the HIJAB STYLE
+                // reference the user asked for). The scaleY + translateY
+                // combination keeps the head anchored to the upper half
+                // and crops the body + feet out of view.
+                const isScarf =
+                  ((selected as any)?.categoryId ?? '') === 'scarves';
+                return (
+                  <Image
+                    source={{ uri: hero.uri }}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      transform: isScarf
+                        ? [{ scale: 1.7 }, { translateY: -70 }]
+                        : [],
+                    }}
+                    resizeMode={isScarf ? 'cover' : 'contain'}
+                  />
+                );
+              })()}
               {lighting.overlay && (
                 <View
                   pointerEvents="none"
@@ -965,13 +965,23 @@ function ProductThumb({
         }}
         resizeMode="cover"
       />
-      {thumb && (
-        <Image
-          source={{ uri: thumb }}
-          style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
-          resizeMode="cover"
-        />
-      )}
+      {thumb && (() => {
+        const isScarf = (product.categoryId ?? '') === 'scarves';
+        return (
+          <Image
+            source={{ uri: thumb }}
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              transform: isScarf ? [{ scale: 1.7 }, { translateY: -25 }] : [],
+            }}
+            resizeMode="cover"
+          />
+        );
+      })()}
       {/* Heart / cart affordances used to sit on the thumbnail but they
           duplicated the primary CTAs already visible on the hero — the
           thumbnail now stays a pure "switch to this product" tap target. */}
