@@ -27,7 +27,6 @@ import { useTheme } from '../../../src/theme/ThemeProvider';
 import { api } from '../../../src/api/client';
 import { errorMessage, errorTitle } from '../../../src/lib/api-errors';
 import { safeBack } from '../../../src/lib/safe-back';
-import { TYING_STYLES, type TyingStyleId } from '../../../src/lib/tying-styles';
 
 type JobStatus = 'pending' | 'running' | 'done' | 'failed';
 interface StyleJob {
@@ -73,7 +72,6 @@ export default function SellerProductDetailScreen() {
   const [hijabUrl, setHijabUrl] = useState('');
   const [uploadingHijab, setUploadingHijab] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [tyingStyle, setTyingStyle] = useState<TyingStyleId>('classical');
   const [approving, setApproving] = useState(false);
   const [approved, setApproved] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -174,11 +172,9 @@ export default function SellerProductDetailScreen() {
     setSubmitting(true);
     try {
       // mannequinUrl bo'sh — backend standart manekin'ga tushuradi.
-      const styleDef = TYING_STYLES.find((s) => s.id === tyingStyle);
       const { data } = await api.post(`/seller/products/${id}/dress-mannequin`, {
         hijabUrl,
-        tyingStyle,
-        tyingPrompt: styleDef?.prompt,
+        tyingStyle: 'classical',
         colorHex: '#8A8D5B',
       });
       setJob(data);
@@ -188,7 +184,7 @@ export default function SellerProductDetailScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [id, hijabUrl, tyingStyle]);
+  }, [id, hijabUrl]);
 
   if (productQuery.isLoading) {
     return (
@@ -287,46 +283,6 @@ export default function SellerProductDetailScreen() {
             colors={colors}
           />
         </View>
-
-        {/* Bog'lash turi — 9 ta kanonik stildan birini tanlang.
-            Backend prompt'ini ana shu stildan oladi. */}
-        <Text variant="label" color="muted" style={{ marginTop: 16, marginBottom: 8 }}>
-          Bog'lash turi
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
-        >
-          {TYING_STYLES.map((s) => {
-            const active = s.id === tyingStyle;
-            return (
-              <Pressable
-                key={s.id}
-                onPress={() => setTyingStyle(s.id)}
-                style={{
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  backgroundColor: active ? colors.oliveDeep : colors.surface,
-                  borderWidth: 1,
-                  borderColor: active ? colors.oliveDeep : colors.rule,
-                }}
-              >
-                <Text
-                  variant="caption"
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: active ? colors.goldSoft : colors.ink,
-                  }}
-                >
-                  {s.label.uz}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
 
         <Pressable
           onPress={submitDressJob}
