@@ -12,6 +12,7 @@ import { api } from '../../src/api/client';
 import { errorMessage, errorTitle } from '../../src/lib/api-errors';
 import { safeBack } from '../../src/lib/safe-back';
 import { formatUsdAsUzs, useUzsRate } from '../../src/lib/currency';
+import { sceneById } from '../../src/lib/scenes';
 
 type CategoryId = 'scarves' | 'dresses' | 'shoes' | 'bags' | 'accessories';
 
@@ -21,6 +22,7 @@ interface Product {
   basePriceUsd: number;
   coverUrl: string;
   seller: { brandName: string; rating: number; reviewsCount: number };
+  attributes?: Record<string, unknown> | null;
   // Needed so the "+" quick-add can pick the first variant without a
   // product-detail round trip.
   variants?: Array<{ id: string }>;
@@ -524,11 +526,22 @@ function ProductCard({
     >
       {/* Image */}
       <View style={{ height: 200, backgroundColor: bg, position: 'relative' }}>
+        {(() => {
+          const scene = sceneById((product.attributes as any)?.sceneId);
+          if (!scene) return null;
+          return (
+            <Image
+              source={scene.source}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
+          );
+        })()}
         {!imgError && product.coverUrl ? (
           <Image
             source={{ uri: product.coverUrl }}
             style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
+            resizeMode="contain"
             onError={() => setImgError(true)}
           />
         ) : (

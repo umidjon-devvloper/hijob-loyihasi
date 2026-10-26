@@ -10,6 +10,7 @@ import { api } from '../../src/api/client';
 import { safeBack } from '../../src/lib/safe-back';
 import { formatUsdAsUzs, useUzsRate } from '../../src/lib/currency';
 import { useTryonCollection, TRYON_ALLOWED_CATEGORIES } from '../../src/store/tryon-collection';
+import { sceneById } from '../../src/lib/scenes';
 
 interface ProductDetail {
   id: string;
@@ -19,6 +20,7 @@ interface ProductDetail {
   basePriceUsd: number;
   coverUrl: string;
   gallery: string[];
+  attributes?: Record<string, unknown> | null;
   description: string;
   seller: { brandName: string; rating: number; reviewsCount: number };
   colors: Array<{ key: string; hex: string; label: string }>;
@@ -136,8 +138,21 @@ export default function ProductScreen() {
           }
         >
           {/* Product Image Area — 3:4 aspect so the full product shot
-              (head to hem) is always visible without cropping. */}
+              (head to hem) is always visible without cropping. The seller's
+              chosen podium backdrop (attributes.sceneId) is drawn behind
+              the product photo so the listing reads as a studio shot. */}
           <View style={{ width: '100%', aspectRatio: 3 / 4, position: 'relative', backgroundColor: colors.surface2 }}>
+            {(() => {
+              const scene = sceneById((product.attributes as any)?.sceneId);
+              if (!scene) return null;
+              return (
+                <Image
+                  source={scene.source}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+              );
+            })()}
             {heroImageUrl ? (
               <Image
                 source={{ uri: heroImageUrl }}
