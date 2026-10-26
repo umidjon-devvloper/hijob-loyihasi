@@ -14,11 +14,19 @@ import * as crypto from 'crypto';
 import { pickMannequinForCategorySize } from './mannequin-pool';
 import { MannequinTemplatesService } from '../mannequin-templates/mannequin-templates.service';
 import { UserFaceRendersService } from '../user-face-renders/user-face-renders.service';
+import { tyingPromptFor } from '../tryon/tying-styles';
 
 export interface DressMannequinInput {
   mannequinUrl?: string;
   hijabUrl: string;
-  tyingStyle?: 'classical' | 'loose' | 'double';
+  // Free-form id so the 9-style catalogue in apps/mobile/src/lib/tying-styles.ts
+  // can grow without a schema migration. Legacy jobs sent 'classical'
+  // / 'loose' / 'double'.
+  tyingStyle?: string;
+  // Textual prompt the Python compositor passes to its diffusion model
+  // for this specific tying style. Set from the mobile tying-styles
+  // registry so new styles can be added without touching the backend.
+  tyingPrompt?: string;
   colorHex?: string;
 }
 
@@ -214,10 +222,20 @@ export class StyleJobsService {
     const current = await this.prisma.product.findUnique({ where: { id: productId } });
     if (!current) throw new NotFoundException('PRODUCT_NOT_FOUND');
     const publishNow = current.status === 'draft' || current.status === 'rejected';
+    // Track which tying styles have at least one approved mannequin so
+    // the Primerka tab can grey out drapes the seller never queued.
+    const prevAttrs = (current.attributes as Record<string, unknown>) ?? {};
+    const prevStyles = Array.isArray(prevAttrs.tyingStyles)
+      ? (prevAttrs.tyingStyles as string[])
+      : [];
+    const tyingStyles = prevStyles.includes(job.tyingStyle)
+      ? prevStyles
+      : [...prevStyles, job.tyingStyle];
     await this.prisma.product.update({
       where: { id: productId },
       data: {
         styledImageUrl: job.resultUrl,
+        attributes: { ...prevAttrs, tyingStyles } as object,
         ...(publishNow ? { status: 'published' as const, publishedAt: new Date() } : {}),
       },
     });
@@ -292,7 +310,11 @@ export class StyleJobsService {
       };
 
       const jpeg = await this.compositor.composeScarf(file, {
-        tyingStyle: job.tyingStyle as 'classical' | 'loose' | 'double',
+        tyingStyle: job.tyingStyle,
+        // Looked up by id from the backend tying-styles mirror so the
+        // Python compositor conditions its diffusion model on the exact
+        // drape the seller picked at submit time.
+        tyingPrompt: tyingPromptFor(job.tyingStyle),
         colorHex: job.colorHex,
         pattern: 'silk',
       });

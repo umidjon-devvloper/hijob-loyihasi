@@ -28,7 +28,12 @@ export interface DressTemplatePayload {
 }
 
 export interface ScarfSpec {
-  tyingStyle: 'classical' | 'loose' | 'double';
+  // Free-form id so new tying styles can be added without touching
+  // this file. Legacy jobs sent 'classical' / 'loose' / 'double'.
+  tyingStyle: string;
+  // Optional textual prompt forwarded to the Python compositor so it
+  // can condition its diffusion model on the exact drape wanted.
+  tyingPrompt?: string;
   colorHex: string;
   pattern?: 'solid' | 'silk' | 'chiffon';
   accentHex?: string | null;
@@ -243,6 +248,7 @@ export class MlCompositorClient {
       'scarf',
       JSON.stringify({
         tying_style: spec.tyingStyle,
+        tying_prompt: spec.tyingPrompt,
         color_hex: spec.colorHex,
         pattern: spec.pattern ?? 'silk',
         accent_hex: spec.accentHex ?? null,
@@ -296,6 +302,7 @@ export class MlCompositorClient {
       'scarf',
       JSON.stringify({
         tying_style: spec.tyingStyle,
+        tying_prompt: spec.tyingPrompt,
         color_hex: spec.colorHex,
         pattern: spec.pattern ?? 'silk',
         opacity: spec.opacity ?? 1.0,
@@ -398,6 +405,7 @@ export class MlCompositorClient {
       'scarf',
       JSON.stringify({
         tying_style: spec.tyingStyle,
+        tying_prompt: spec.tyingPrompt,
         color_hex: spec.colorHex,
         opacity: spec.opacity ?? 1.0,
       }),

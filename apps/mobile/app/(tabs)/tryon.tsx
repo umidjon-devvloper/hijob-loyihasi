@@ -13,6 +13,7 @@ import { errorMessage, errorTitle } from '../../src/lib/api-errors';
 import { useTryonOnboarding, type BodyType } from '../../src/store/tryon-onboarding';
 import { useTryonCollection, TRYON_ALLOWED_CATEGORIES } from '../../src/store/tryon-collection';
 import { sceneById } from '../../src/lib/scenes';
+import { TYING_STYLES, type TyingStyleId } from '../../src/lib/tying-styles';
 
 interface Variant {
   id: string;
@@ -206,6 +207,25 @@ export default function TryOnScreen() {
 
   const [lightIdx, setLightIdx] = useState(0);
   const lighting = LIGHTING[lightIdx] ?? LIGHTING[0];
+  const [tyingStyleId, setTyingStyleId] = useState<TyingStyleId>('classical');
+  const [tyingPickerOpen, setTyingPickerOpen] = useState(false);
+
+  // Which tying styles exist for the selected product? Each dress-mannequin
+  // job the seller submitted produced one render set tied to its own
+  // tyingStyle, so we check the product's job list to grey out the styles
+  // the seller never queued. The /seller route is seller-only, so we read
+  // from the public catalog + /tryon endpoints that already return done
+  // jobs; for an MVP we treat the current product's resultVariants as the
+  // "classical" set and offer the others only when the seller has
+  // explicitly published a render for them in the future.
+  const availableTyingStyles = useMemo(() => {
+    const avail = new Set<TyingStyleId>();
+    // The job that produced resultVariants carries its own tyingStyle in
+    // attributes.tyingStyles[] when the seller submitted several styles.
+    const published = ((selected?.attributes as any)?.tyingStyles ?? ['classical']) as TyingStyleId[];
+    for (const s of published) avail.add(s);
+    return avail;
+  }, [selected?.attributes]);
 
   // Pre-rendered face-swapped mannequins keyed by variant id. The backend
   // queue (user-face-renders) builds one per variant the buyer could land
@@ -472,6 +492,72 @@ export default function TryOnScreen() {
                 />
               )}
 
+              {/* Tying-style picker overlay — opens from under the
+                  'Bog'lash' side action. Styles the seller never queued
+                  for this product are shown greyed out with a 'yo'q'
+                  (none) label, so the buyer sees the full catalogue of
+                  drapes and knows which ones to request. */}
+              {tyingPickerOpen && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: 90,
+                    left: 10,
+                    right: 10,
+                    backgroundColor: 'rgba(21,21,15,0.88)',
+                    borderRadius: 16,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingHorizontal: 10 }}
+                  >
+                    {TYING_STYLES.map((s) => {
+                      const active = s.id === tyingStyleId;
+                      const available = availableTyingStyles.has(s.id);
+                      return (
+                        <Pressable
+                          key={s.id}
+                          onPress={() => {
+                            if (!available) {
+                              Alert.alert(
+                                s.label.uz,
+                                "Bu bog'lash turi uchun maneken yo'q — sotuvchi hali bu stilni tayyorlab bermagan.",
+                              );
+                              return;
+                            }
+                            setTyingStyleId(s.id);
+                            setTyingPickerOpen(false);
+                          }}
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 7,
+                            borderRadius: 18,
+                            backgroundColor: active ? colors.gold : 'rgba(255,255,255,0.08)',
+                            borderWidth: 1,
+                            borderColor: active ? colors.gold : 'rgba(255,255,255,0.18)',
+                            opacity: available ? 1 : 0.45,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: '600',
+                              color: active ? colors.ink : '#F0EBDA',
+                            }}
+                          >
+                            {s.label.uz}
+                            {!available ? "  ·  yo'q" : ''}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
               {/* Floating side actions */}
               <View style={{ position: 'absolute', top: 18, right: 14, gap: 12 }}>
                 <SideAction
@@ -490,6 +576,13 @@ export default function TryOnScreen() {
                   icon="sunny-outline"
                   label={lighting.label}
                   onPress={() => setLightIdx((i) => (i + 1) % LIGHTING.length)}
+                />
+                <SideAction
+                  icon="shirt-outline"
+                  label={
+                    (TYING_STYLES.find((t) => t.id === tyingStyleId)?.label.uz ?? 'Klassik')
+                  }
+                  onPress={() => setTyingPickerOpen((v) => !v)}
                 />
               </View>
 
