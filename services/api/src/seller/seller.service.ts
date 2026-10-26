@@ -388,6 +388,7 @@ export class SellerService {
       popularityScore: p.popularityScore,
       variantCount: p._count.variants,
       totalStock: p.variants.reduce((sum, v) => sum + v.stock, 0),
+      sceneId: ((p.attributes as Record<string, unknown>) ?? {})['sceneId'] ?? null,
     }));
   }
 

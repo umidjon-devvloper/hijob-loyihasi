@@ -391,9 +391,7 @@ export default function TryOnScreen() {
           }}
         >
           <Image
-            source={
-              sceneById((selected?.attributes as any)?.sceneId)?.source ?? FITTING_ROOM
-            }
+            source={FITTING_ROOM}
             style={{
               position: 'absolute',
               top: 0,
@@ -855,7 +853,7 @@ function ProductThumb({
       }}
     >
       <Image
-        source={sceneById((product.attributes as any)?.sceneId)?.source ?? FITTING_ROOM}
+        source={FITTING_ROOM}
         style={{
           position: 'absolute',
           top: 0,

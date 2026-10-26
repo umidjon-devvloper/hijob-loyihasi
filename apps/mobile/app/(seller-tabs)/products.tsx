@@ -8,6 +8,7 @@ import { Screen } from '../../src/components/Screen';
 import { Text } from '../../src/components/Text';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { api } from '../../src/api/client';
+import { sceneById } from '../../src/lib/scenes';
 
 // Backend product status enum (prisma ProductStatus). "published" is what the
 // UI used to call "live"; "archived" and "rejected" are grouped under
@@ -24,6 +25,7 @@ interface SellerProduct {
   status: BackendStatus;
   variantCount: number;
   totalStock: number;
+  sceneId?: string | null;
 }
 
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -330,21 +332,51 @@ export default function SellerProductsScreen() {
             >
               <View
                 style={{
-                  width: 60,
-                  height: 60,
+                  width: 72,
+                  height: 96,
                   borderRadius: 12,
                   backgroundColor: PLACEHOLDER_BG[index % PLACEHOLDER_BG.length],
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
                   overflow: 'hidden',
+                  position: 'relative',
                 }}
               >
+                {(() => {
+                  const scene = sceneById(item.sceneId);
+                  if (!scene) return null;
+                  return (
+                    <Image
+                      source={scene.source}
+                      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                  );
+                })()}
                 {item.coverUrl ? (
-                  <Image source={{ uri: item.coverUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  <Image
+                    source={{ uri: item.coverUrl }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="contain"
+                  />
                 ) : (
                   <Ionicons name="ribbon-outline" size={24} color="rgba(255,255,255,0.35)" />
                 )}
+                {/* Dot showing the current scene (gold = picked, grey = none) */}
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: 4,
+                    right: 4,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: sceneById(item.sceneId) ? colors.gold : 'rgba(0,0,0,0.25)',
+                    borderWidth: 1.5,
+                    borderColor: colors.surface,
+                  }}
+                />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text
