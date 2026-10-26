@@ -477,7 +477,14 @@ export default function TryOnScreen() {
                 <SideAction
                   icon="camera-outline"
                   label={'Yuzni\nyangilash'}
-                  onPress={() => router.push('/(tryon-onboarding)/face')}
+                  onPress={() => {
+                    // Wipe the user's existing renders + queued jobs so the
+                    // next prepare() call rebuilds the whole catalogue from
+                    // the fresh selfie instead of serving stale mannequins.
+                    api.post('/tryon/reset').catch(() => {});
+                    qc.invalidateQueries({ queryKey: ['tryon-my-renders'] });
+                    router.push('/(tryon-onboarding)/face');
+                  }}
                 />
                 <SideAction
                   icon="sunny-outline"

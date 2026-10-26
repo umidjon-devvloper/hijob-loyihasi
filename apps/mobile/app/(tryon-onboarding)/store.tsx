@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import Svg, { Circle, Path, Polyline } from 'react-native-svg';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { useTryonOnboarding } from '../../src/store/tryon-onboarding';
+import { useTryonCollection } from '../../src/store/tryon-collection';
 import { api } from '../../src/api/client';
 import { safeBack } from '../../src/lib/safe-back';
 
@@ -28,6 +29,7 @@ export default function StoreSelectScreen() {
   const router = useRouter();
   const selectedId = useTryonOnboarding((s) => s.storeId);
   const setStore = useTryonOnboarding((s) => s.setStore);
+  const clearCollection = useTryonCollection((s) => s.clear);
 
   const { data, isLoading } = useQuery<Store[]>({
     queryKey: ['tryon-onb-stores'],
@@ -38,6 +40,11 @@ export default function StoreSelectScreen() {
 
   const pick = async (id: string) => {
     await setStore(id);
+    // Switching stores wipes the user's Primerka collection so the
+    // tab shows the newly-picked shop's own catalogue instead of a
+    // mix from previous shops. Items from different stores no longer
+    // make sense once the buyer narrowed down to one shop.
+    await clearCollection();
   };
 
   const next = () => {

@@ -85,6 +85,19 @@ export class UserFaceRendersController {
    * the missing variants are queued so the Primerka tab shows the
    * face-swapped mannequin within a few seconds of the buyer opening it.
    */
+  /**
+   * Called after a buyer re-takes their selfie ("Yuzni yangilash").
+   * Deletes every existing render + open job for the user and queues
+   * the whole catalogue again with the new selfie — otherwise the old
+   * mannequins would stay cached forever.
+   */
+  @Post('reset')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  reset(@CurrentUser() user: CurrentUserInfo) {
+    return this.svc.resetForUser(user.id);
+  }
+
   @Post('enqueue-product/:id')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)

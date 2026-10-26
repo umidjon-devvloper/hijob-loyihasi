@@ -173,6 +173,26 @@ export class UserFaceRendersService {
   }
 
   /**
+   * Nuke every existing render + open job for a user so a fresh selfie
+   * (new "Yuzni yangilash" run) can re-generate the whole catalogue
+   * from scratch. Called at the end of the face re-take flow — without
+   * this the service happily keeps old mannequins from the previous
+   * face.
+   */
+  async resetForUser(userId: string): Promise<{ cleared: number; requeued: number }> {
+    const [renders, jobs] = await Promise.all([
+      this.prisma.userFaceRender.deleteMany({ where: { userId } }),
+      this.prisma.userFaceRenderJob.deleteMany({ where: { userId } }),
+    ]);
+    this.faceStampCache.delete(userId);
+    const queued = await this.enqueueAll(userId);
+    this.logger.log(
+      `reset for user ${userId}: cleared ${renders.count} renders, ${jobs.count} jobs; requeued ${queued}`,
+    );
+    return { cleared: renders.count + jobs.count, requeued: queued };
+  }
+
+  /**
    * Belt-and-suspenders: when the buyer adds a product to their Primerka
    * collection, make sure every one of its variants has either a done
    * render or an open job. Covers the edge case where the buyer onboarded
