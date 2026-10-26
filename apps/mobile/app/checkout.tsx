@@ -23,6 +23,7 @@ import { api } from '../src/api/client';
 import { errorMessage, errorTitle } from '../src/lib/api-errors';
 import { safeBack } from '../src/lib/safe-back';
 import { formatUsdAsUzs, formatUzs, useUzsRate, usdToUzs } from '../src/lib/currency';
+import * as Location from 'expo-location';
 
 // Backend contracts (/cart, /addresses, /orders/checkout).
 interface CartItem {
@@ -514,7 +515,6 @@ function NewAddressModal({ onClose, onCreated }: NewAddressModalProps) {
   const pickCurrentLocation = async () => {
     try {
       setLocating(true);
-      const Location = await import('expo-location');
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(

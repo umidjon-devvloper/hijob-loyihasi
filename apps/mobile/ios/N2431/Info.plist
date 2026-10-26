@@ -33,9 +33,13 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>25</string>
+	<string>26</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>24:31 yetkazib berish manzilini belgilash uchun joylashuvdan foydalanadi.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>24:31 yetkazib berish manzilini belgilash uchun joylashuvdan foydalanadi.</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>12.0</string>
 	<key>LSRequiresIPhoneOS</key>
