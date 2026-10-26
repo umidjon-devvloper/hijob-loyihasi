@@ -11,6 +11,7 @@ import { Logo } from '../../src/components/Logo';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { useAuth } from '../../src/store/auth';
 import { useTryonCollection } from '../../src/store/tryon-collection';
+import { sceneById } from '../../src/lib/scenes';
 import { api } from '../../src/api/client';
 import { errorMessage, errorTitle } from '../../src/lib/api-errors';
 
@@ -25,6 +26,7 @@ interface HomeFeed {
     title: { ru: string; uz: string };
     basePriceUsd: number;
     coverUrl: string;
+    attributes?: Record<string, unknown> | null;
     seller?: { brandName: string; rating: number };
     variants: Array<{ id: string }>;
   }>;
@@ -782,11 +784,22 @@ export default function HomeScreen() {
                 >
                   {/* Image */}
                   <View style={{ height: 210, backgroundColor: bg, position: 'relative' }}>
+                    {(() => {
+                      const scene = sceneById((p.attributes as any)?.sceneId);
+                      if (!scene) return null;
+                      return (
+                        <Image
+                          source={scene.source}
+                          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+                          resizeMode="cover"
+                        />
+                      );
+                    })()}
                     {p.coverUrl ? (
                       <Image
                         source={{ uri: p.coverUrl }}
                         style={{ width: '100%', height: '100%' }}
-                        resizeMode="cover"
+                        resizeMode="contain"
                       />
                     ) : (
                       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

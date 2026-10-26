@@ -461,7 +461,13 @@ function EditProductModal({
   const [bodyFit, setBodyFit] = useState<'slim' | 'regular' | 'plus' | null>(null);
   const [sceneId, setSceneId] = useState<SceneId | null>((product.sceneId as SceneId) ?? null);
   const [variants, setVariants] = useState<FullVariant[]>([]);
+  // Raw cover (what the seller uploaded) — this is what gets replaced
+  // when the seller picks a new image, and what we PATCH back.
   const [coverUrl, setCoverUrl] = useState<string | null>(product.coverUrl);
+  // Styled mannequin image (what the buyer sees) — rendered on top of
+  // the scene so the preview matches the catalogue card, not the raw
+  // product shot. Fetched alongside the full product.
+  const [styledUrl, setStyledUrl] = useState<string | null>(product.coverUrl);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -476,6 +482,7 @@ function EditProductModal({
     setBodyFit(full.bodyFit ?? null);
     setSceneId((full.attributes?.sceneId as SceneId) ?? null);
     setCoverUrl(full.rawCoverUrl ?? full.coverUrl ?? null);
+    setStyledUrl(full.styledImageUrl ?? full.coverUrl ?? null);
     setVariants(
       (full.variants ?? []).map((v: any) => ({
         id: v.id,
@@ -629,9 +636,9 @@ function EditProductModal({
                   resizeMode="cover"
                 />
               )}
-              {coverUrl && (
+              {(styledUrl ?? coverUrl) && (
                 <Image
-                  source={{ uri: coverUrl }}
+                  source={{ uri: styledUrl ?? coverUrl! }}
                   style={{ width: '100%', height: '100%' }}
                   resizeMode="contain"
                 />
