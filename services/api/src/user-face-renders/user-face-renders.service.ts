@@ -178,6 +178,13 @@ export class UserFaceRendersService {
         `reset: could not clear disk stamp for ${userId}: ${(err as Error).message}`,
       ),
     );
+    // Also drop the first-render source so the next facefusion rebuilds
+    // it from the fresh selfie instead of keying off the old mannequin
+    // swap. Without this, "Yuzni yangilash" would carry the old look
+    // forward even on a brand new selfie.
+    await this.storage
+      .delete(`tryon/first-render/${userId}/source.jpg`)
+      .catch(() => undefined);
     const queued = await this.enqueueAll(userId);
     this.logger.log(
       `reset for user ${userId}: cleared ${renders.count} renders, ${jobs.count} jobs; requeued ${queued}`,
@@ -421,11 +428,29 @@ export class UserFaceRendersService {
       }
 
       if (!jpeg) {
-        const selfieBytes = await this.storage.read(job.user.selfieKey);
+        // Prefer the FIRST successful swap for this user as the "source
+        // face" image for every subsequent render. Facefusion keyed off
+        // a well-posed, well-lit face in a hijab shot gives much more
+        // consistent results than keying off the raw phone selfie — the
+        // first mannequin kept coming out beautiful but the next ones
+        // were drifting. The source lives at `tryon/first-render/<userId>`.
+        const firstRenderKey = `tryon/first-render/${job.userId}/source.jpg`;
+        let sourceBytes: Buffer | null = null;
+        let sourceMime = 'image/jpeg';
+        try {
+          sourceBytes = await this.storage.read(firstRenderKey);
+        } catch {
+          sourceBytes = null;
+        }
+        if (!sourceBytes) {
+          sourceBytes = await this.storage.read(job.user.selfieKey);
+          sourceMime = 'image/jpeg';
+        }
+
         const fusion = await this.compositor.composeFacefusion(mannequinFile, {
-          buffer: selfieBytes,
-          mimetype: 'image/jpeg',
-          originalname: 'selfie.jpg',
+          buffer: sourceBytes,
+          mimetype: sourceMime,
+          originalname: 'source.jpg',
         } as unknown as Express.Multer.File);
         jpeg = fusion.buffer;
         outContentType = fusion.contentType || 'image/jpeg';
@@ -434,10 +459,26 @@ export class UserFaceRendersService {
           `facefusion path for ${job.variantId} (${jpeg.length} B, ${outContentType})`,
         );
 
-        // First successful swap for this user → cache its face as a stamp
-        // AND persist it to storage so every later variant (even across
-        // process restarts) takes the cheap overlay path.
+        // First successful swap for this user → persist the result as
+        // the reusable source and derive a stamp from it. The source
+        // steadies every subsequent render; the stamp stays in cache so
+        // the opt-in TRYON_FAST_OVERLAY=1 path still works.
         if (!this.faceStampCache.has(job.userId)) {
+          try {
+            await this.storage.save(
+              firstRenderKey,
+              jpeg,
+              outContentType,
+              'source.jpg',
+            );
+            this.logger.log(
+              `first-render source persisted for user ${job.userId} (${jpeg.length} B)`,
+            );
+          } catch (persistErr) {
+            this.logger.warn(
+              `persist first-render source failed for ${job.userId}: ${(persistErr as Error).message}`,
+            );
+          }
           try {
             const freshStamp = await this.compositor.composeFaceStamp(jpeg);
             this.faceStampCache.set(job.userId, freshStamp);
