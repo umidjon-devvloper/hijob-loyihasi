@@ -78,17 +78,6 @@ export default function WelcomeScreen() {
 
           {/* Brand Name */}
           <View style={{ alignItems: 'center' }}>
-            <RNText
-              style={{
-                fontFamily: theme.fontFamilies.display,
-                fontSize: 44,
-                fontWeight: '800',
-                color: colors.oliveDeep,
-                letterSpacing: -0.5,
-              }}
-            >
-              Hijob
-            </RNText>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
               <View style={{ width: 5, height: 5, backgroundColor: colors.gold, transform: [{ rotate: '45deg' }], opacity: 0.6 }} />
               <RNText
@@ -100,7 +89,7 @@ export default function WelcomeScreen() {
                   textTransform: 'uppercase',
                 }}
               >
-                Modest Fashion
+                Islamic Fashion
               </RNText>
               <View style={{ width: 5, height: 5, backgroundColor: colors.gold, transform: [{ rotate: '45deg' }], opacity: 0.6 }} />
             </View>
