@@ -85,32 +85,16 @@ export class UserFaceRendersService {
       ),
     );
 
-    // Phase 2 (TZ §4) — face preservation: build the stamp from the user's
-    // ACTUAL selfie right now, not from a later facefusion result. This
-    // guarantees the face identity (eyes, nose, lips, skin tone, jawline)
-    // is the user's own on every variant from the very first render,
-    // instead of being a facefusion-warped version of it. The slow
-    // facefusion only runs when the selfie-derived stamp cannot be built
-    // (e.g. no face detected on the selfie).
-    try {
-      const stamp = await this.compositor.composeFaceStamp(selfie.buffer);
-      this.faceStampCache.set(userId, stamp);
-      await this.storage.save(
-        `tryon/stamps/${userId}`,
-        stamp,
-        'image/png',
-        'stamp.png',
-      );
-      this.logger.log(
-        `face stamp pre-built from selfie for user ${userId} (${stamp.length} B)`,
-      );
-    } catch (err) {
-      // Not fatal — the worker will fall back to facefusion on the first
-      // variant and build the stamp from that result (legacy path).
-      this.logger.warn(
-        `selfie-direct stamp build failed for ${userId}: ${(err as Error).message}; worker will fall back to facefusion`,
-      );
-    }
+    // NOTE: we used to pre-build a face stamp straight from the raw
+    // selfie here. That stamp is a floating face oval with no hairline
+    // or jaw context, so when the worker glued it onto a mannequin the
+    // result looked like a mask hovering in front of the body. We now
+    // let the FIRST job for this user go through the slow facefusion
+    // path (identity-preserving pixel-level swap), take THAT high-
+    // quality result and derive the stamp from it. Every variant after
+    // the first one still gets the cheap overlay path, but the stamp
+    // feeding that overlay is now the good facefusion-derived one
+    // instead of the raw-selfie one.
 
     const queued = await this.enqueueAll(userId, { sellerId: opts.sellerId ?? null });
 
