@@ -381,7 +381,11 @@ export class SellerService {
       titleUz: p.titleUz,
       categoryId: p.categoryId,
       basePriceUsd: Number(p.basePriceUsd),
-      coverUrl: p.coverUrl,
+      // Prefer the mannequin-styled image so the seller sees the exact
+      // card the buyer sees (mannequin wearing the item). Falls back to
+      // the raw upload while the dress-mannequin job is still pending.
+      coverUrl: p.styledImageUrl ?? p.coverUrl,
+      rawCoverUrl: p.coverUrl,
       status: p.status,
       createdAt: p.createdAt.toISOString(),
       publishedAt: p.publishedAt?.toISOString() ?? null,
