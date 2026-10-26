@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, FlatList, Image, Pressable, RefreshControl, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +8,7 @@ import { Screen } from '../../src/components/Screen';
 import { Text } from '../../src/components/Text';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { api } from '../../src/api/client';
-import { sceneById } from '../../src/lib/scenes';
+import { sceneById, SCENES, type SceneId } from '../../src/lib/scenes';
 
 // Backend product status enum (prisma ProductStatus). "published" is what the
 // UI used to call "live"; "archived" and "rejected" are grouped under
@@ -54,6 +54,7 @@ export default function SellerProductsScreen() {
   const L = (uz: string, ru: string, en: string, ar: string) => ({ uz, ru, en, ar }[lang] ?? uz);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState<SellerProduct | null>(null);
   const queryClient = useQueryClient();
 
   const openProductMenu = (item: SellerProduct) => {
@@ -66,12 +67,8 @@ export default function SellerProductsScreen() {
           onPress: () => router.push(`/seller/product/${item.id}` as any),
         },
         {
-          text: L('Narx', 'Цена', 'Price', 'السعر'),
-          onPress: () => promptEdit(item),
-        },
-        {
-          text: L('Orqa fon', 'Фон', 'Backdrop', 'الخلفية'),
-          onPress: () => promptScene(item),
+          text: L('Tahrirlash', 'Редактировать', 'Edit', 'تعديل'),
+          onPress: () => setEditing(item),
         },
         {
           text: L('O\'chirish', 'Удалить', 'Delete', 'حذف'),
@@ -80,65 +77,6 @@ export default function SellerProductsScreen() {
         },
         { text: L('Bekor', 'Отмена', 'Cancel', 'إلغаء'), style: 'cancel' },
       ],
-    );
-  };
-
-  const promptScene = (item: SellerProduct) => {
-    Alert.alert(
-      L('Orqa fonni tanlang', 'Выберите фон', 'Pick a backdrop', 'اختر الخلفية'),
-      item.titleRu || '',
-      [
-        {
-          text: L('Zumrad ko\'k', 'Голубой', 'Blue', 'أزرق'),
-          onPress: () => applyScene(item.id, 'blue'),
-        },
-        {
-          text: L('Zaytun', 'Оливковый', 'Olive', 'زيتوني'),
-          onPress: () => applyScene(item.id, 'olive'),
-        },
-        {
-          text: L('Krem', 'Бежевый', 'Beige', 'بيج'),
-          onPress: () => applyScene(item.id, 'beige'),
-        },
-        { text: L('Bekor', 'Отмена', 'Cancel', 'إلغаء'), style: 'cancel' },
-      ],
-    );
-  };
-
-  const applyScene = async (productId: string, sceneId: 'blue' | 'olive' | 'beige') => {
-    try {
-      await api.patch(`/seller/products/${productId}`, { sceneId });
-      await queryClient.invalidateQueries({ queryKey: ['seller', 'products'] });
-    } catch (e: any) {
-      Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), e?.response?.data?.message ?? e?.message ?? 'xatolik');
-    }
-  };
-
-  const promptEdit = (item: SellerProduct) => {
-    Alert.prompt?.(
-      L('Narx (USD)', 'Цена (USD)', 'Price (USD)', 'السعر (USD)'),
-      L('Yangi narxni kiriting', 'Введите новую цену', 'Enter the new price', 'أدخل السعر الجديد'),
-      [
-        { text: L('Bekor', 'Отмена', 'Cancel', 'إلغاء'), style: 'cancel' },
-        {
-          text: L('Saqlash', 'Сохранить', 'Save', 'حفظ'),
-          onPress: async (value?: string) => {
-            const price = Number(value);
-            if (!value || Number.isNaN(price) || price <= 0) {
-              Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), L('Narx noto\'g\'ri', 'Неверная цена', 'Invalid price', 'سعر غير صحيح'));
-              return;
-            }
-            try {
-              await api.patch(`/seller/products/${item.id}`, { basePriceUsd: price });
-              await queryClient.invalidateQueries({ queryKey: ['seller', 'products'] });
-            } catch (e: any) {
-              Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), e?.response?.data?.message ?? e?.message ?? 'xatolik');
-            }
-          },
-        },
-      ],
-      'plain-text',
-      String(item.basePriceUsd),
     );
   };
 
@@ -452,6 +390,249 @@ export default function SellerProductsScreen() {
           );
         }}
       />
+
+      {editing && (
+        <EditProductModal
+          product={editing}
+          onClose={() => setEditing(null)}
+          onSaved={async () => {
+            setEditing(null);
+            await queryClient.invalidateQueries({ queryKey: ['seller', 'products'] });
+          }}
+          L={L}
+        />
+      )}
     </Screen>
+  );
+}
+
+function EditProductModal({
+  product,
+  onClose,
+  onSaved,
+  L,
+}: {
+  product: SellerProduct;
+  onClose: () => void;
+  onSaved: () => void;
+  L: (uz: string, ru: string, en: string, ar: string) => string;
+}) {
+  const { colors, theme } = useTheme();
+  const [title, setTitle] = useState(product.titleRu || product.titleUz || '');
+  const [priceUsd, setPriceUsd] = useState(String(product.basePriceUsd));
+  const [sceneId, setSceneId] = useState<SceneId | null>((product.sceneId as SceneId) ?? null);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const price = Number(priceUsd);
+    if (!priceUsd || Number.isNaN(price) || price <= 0) {
+      Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), L('Narx noto\'g\'ri', 'Неверная цена', 'Invalid price', 'سعر غير صحيح'));
+      return;
+    }
+    try {
+      setSaving(true);
+      await api.patch(`/seller/products/${product.id}`, {
+        titleRu: title.trim(),
+        basePriceUsd: price,
+        sceneId: sceneId,
+      });
+      onSaved();
+    } catch (e: any) {
+      Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), e?.response?.data?.message ?? e?.message ?? 'xatolik');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View
+          style={{
+            backgroundColor: colors.bg,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            maxHeight: '92%',
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 20,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.rule,
+            }}
+          >
+            <Text
+              variant="displayLarge"
+              color="oliveDeep"
+              style={{ fontSize: 18, fontWeight: '700', fontFamily: theme.fontFamilies.display }}
+            >
+              {L('Tahrirlash', 'Редактировать', 'Edit', 'تعديل')}
+            </Text>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={24} color={colors.ink} />
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+            {/* Big live preview — mannequin on the picked scene */}
+            <View
+              style={{
+                width: '100%',
+                aspectRatio: 3 / 4,
+                borderRadius: 16,
+                overflow: 'hidden',
+                backgroundColor: colors.surface2,
+                marginBottom: 20,
+              }}
+            >
+              {sceneById(sceneId) && (
+                <Image
+                  source={sceneById(sceneId)!.source}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+              )}
+              {product.coverUrl && (
+                <Image
+                  source={{ uri: product.coverUrl }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="contain"
+                />
+              )}
+            </View>
+
+            {/* Scene thumbnails — visible pick */}
+            <Text
+              variant="caption"
+              color="muted"
+              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}
+            >
+              {L('Orqa fon', 'Фон', 'Backdrop', 'الخلفية')}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
+              {SCENES.map((s) => {
+                const active = s.id === sceneId;
+                return (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => setSceneId(s.id)}
+                    style={{
+                      flex: 1,
+                      borderRadius: 12,
+                      borderWidth: active ? 3 : 1,
+                      borderColor: active ? colors.gold : colors.rule,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Image source={s.source} style={{ width: '100%', height: 90 }} resizeMode="cover" />
+                    <View
+                      style={{
+                        paddingVertical: 6,
+                        alignItems: 'center',
+                        backgroundColor: colors.surface,
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.ink }}>
+                        {s.label.uz}
+                      </Text>
+                    </View>
+                    {active && (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          top: 6,
+                          right: 6,
+                          backgroundColor: colors.gold,
+                          borderRadius: 10,
+                          padding: 2,
+                        }}
+                      >
+                        <Ionicons name="checkmark" size={12} color={colors.ink} />
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Title */}
+            <Text
+              variant="caption"
+              color="muted"
+              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}
+            >
+              {L('Nomi', 'Название', 'Title', 'الاسم')}
+            </Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              style={{
+                backgroundColor: colors.surface,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.rule,
+                paddingHorizontal: 12,
+                paddingVertical: 11,
+                fontSize: 14,
+                color: colors.ink,
+                marginBottom: 16,
+              }}
+            />
+
+            {/* Price */}
+            <Text
+              variant="caption"
+              color="muted"
+              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}
+            >
+              {L('Narx (USD)', 'Цена (USD)', 'Price (USD)', 'السعر (USD)')}
+            </Text>
+            <TextInput
+              value={priceUsd}
+              onChangeText={setPriceUsd}
+              keyboardType="decimal-pad"
+              style={{
+                backgroundColor: colors.surface,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.rule,
+                paddingHorizontal: 12,
+                paddingVertical: 11,
+                fontSize: 14,
+                color: colors.ink,
+                marginBottom: 20,
+              }}
+            />
+
+            <Pressable
+              onPress={save}
+              disabled={saving}
+              style={{
+                height: 52,
+                borderRadius: 16,
+                backgroundColor: colors.oliveDeep,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+                opacity: saving ? 0.6 : 1,
+              }}
+            >
+              {saving ? (
+                <ActivityIndicator color={colors.goldSoft} />
+              ) : (
+                <Text style={{ fontSize: 15, fontWeight: '700', color: colors.goldSoft }}>
+                  {L('Saqlash', 'Сохранить', 'Save', 'حفظ')}
+                </Text>
+              )}
+            </Pressable>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
