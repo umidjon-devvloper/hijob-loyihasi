@@ -391,32 +391,32 @@ export class UserFaceRendersService {
         filename: 'mannequin.jpg',
       };
 
-      // Try the cheap path first: if we already have a face stamp for this
-      // user (either in process memory or re-derivable from any existing
-      // render), overlay it in ~2 s instead of spending 2 min on a fresh
-      // facefusion swap. The slow path only runs once per user, ever.
-      const stamp = await this.getOrBuildFaceStamp(job.userId, job.user.selfieKey);
+      // Overlay path (stamp pasted onto mannequin) looked like a mask
+      // floating in front of the body — the stamp doesn't carry the
+      // scale / alignment context the mannequin head needs. We now
+      // always run facefusion (pixel-level identity-preserving swap)
+      // so every variant lands as a properly aligned, properly scaled
+      // face on the mannequin's head. TRYON_FAST_OVERLAY=1 opts back
+      // into the old cheap path if an operator ever needs it.
+      const useOverlay = process.env.TRYON_FAST_OVERLAY === '1';
       let jpeg: Buffer | null = null;
-      // The compositor keeps the mannequin's alpha channel (PNG in,
-      // PNG out) so we store the overlay with the right extension and
-      // the mobile hero can show its boutique backdrop through it.
       let outContentType = 'image/jpeg';
       let outExt = 'jpg';
-      if (stamp) {
-        try {
-          const overlay = await this.compositor.composeFaceOverlay(mannequinFile, stamp);
-          jpeg = overlay.buffer;
-          outContentType = overlay.contentType || 'image/jpeg';
-          outExt = outContentType === 'image/png' ? 'png' : 'jpg';
-          this.logger.log(
-            `overlay path for ${job.variantId} (${jpeg.length} B, ${outContentType})`,
-          );
-        } catch (overlayErr) {
-          // Mannequin had no detectable face (or overlay crashed) — fall
-          // through to a full facefusion run so this one variant still
-          // gets a proper render.
-          const detail = (overlayErr as { message?: string })?.message ?? '';
-          this.logger.warn(`overlay fell back to facefusion: ${detail}`);
+      if (useOverlay) {
+        const stamp = await this.getOrBuildFaceStamp(job.userId, job.user.selfieKey);
+        if (stamp) {
+          try {
+            const overlay = await this.compositor.composeFaceOverlay(mannequinFile, stamp);
+            jpeg = overlay.buffer;
+            outContentType = overlay.contentType || 'image/jpeg';
+            outExt = outContentType === 'image/png' ? 'png' : 'jpg';
+            this.logger.log(
+              `overlay path for ${job.variantId} (${jpeg.length} B, ${outContentType})`,
+            );
+          } catch (overlayErr) {
+            const detail = (overlayErr as { message?: string })?.message ?? '';
+            this.logger.warn(`overlay fell back to facefusion: ${detail}`);
+          }
         }
       }
 
