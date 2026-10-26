@@ -184,7 +184,16 @@ export class UserFaceRendersService {
       this.prisma.userFaceRender.deleteMany({ where: { userId } }),
       this.prisma.userFaceRenderJob.deleteMany({ where: { userId } }),
     ]);
+    // Memory cache alone isn't enough — getOrBuildFaceStamp re-hydrates
+    // from the disk key `tryon/stamps/<userId>/stamp.png`, which keeps
+    // the OLD face identity alive forever. Delete the disk stamp too so
+    // the next prepare() call rebuilds it from a fresh selfie.
     this.faceStampCache.delete(userId);
+    await this.deleteStoredStamp(userId).catch((err) =>
+      this.logger.warn(
+        `reset: could not clear disk stamp for ${userId}: ${(err as Error).message}`,
+      ),
+    );
     const queued = await this.enqueueAll(userId);
     this.logger.log(
       `reset for user ${userId}: cleared ${renders.count} renders, ${jobs.count} jobs; requeued ${queued}`,
