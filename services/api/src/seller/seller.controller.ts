@@ -94,10 +94,24 @@ export class SellerController {
     body: {
       titleUz?: string;
       titleRu?: string;
+      titleEn?: string;
       basePriceUsd?: number;
       descriptionUz?: string;
       descriptionRu?: string;
+      categoryId?: any;
+      bodyFit?: any;
+      coverUrl?: string;
       sceneId?: string | null;
+      variants?: Array<{
+        id?: string;
+        color?: string;
+        colorHex?: string;
+        size?: string;
+        stock?: number;
+        priceUsd?: number | null;
+        images?: string[];
+        remove?: boolean;
+      }>;
     },
   ) {
     return this.seller.updateProduct(user.id, id, body);

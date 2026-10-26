@@ -520,14 +520,31 @@ export class SellerService {
     dto: {
       titleUz?: string;
       titleRu?: string;
+      titleEn?: string;
       basePriceUsd?: number;
       descriptionUz?: string;
       descriptionRu?: string;
+      categoryId?: CategoryId;
+      bodyFit?: 'slim' | 'regular' | 'plus' | null;
+      coverUrl?: string;
       sceneId?: string | null;
+      variants?: Array<{
+        id?: string;
+        color?: string;
+        colorHex?: string;
+        size?: string;
+        stock?: number;
+        priceUsd?: number | null;
+        images?: string[];
+        remove?: boolean;
+      }>;
     },
   ) {
     const seller = await this.requireSeller(userId);
-    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      include: { variants: true },
+    });
     if (!product) throw new NotFoundException('PRODUCT_NOT_FOUND');
     if (product.sellerId !== seller.id) throw new ForbiddenException('NOT_YOUR_PRODUCT');
 
@@ -539,17 +556,67 @@ export class SellerService {
       nextAttributes = { ...prev, sceneId: dto.sceneId };
     }
 
-    const updated = await this.prisma.product.update({
-      where: { id: productId },
-      data: {
-        ...(dto.titleUz !== undefined && { titleUz: dto.titleUz }),
-        ...(dto.titleRu !== undefined && { titleRu: dto.titleRu }),
-        ...(dto.basePriceUsd !== undefined && { basePriceUsd: dto.basePriceUsd }),
-        ...(dto.descriptionUz !== undefined && { descriptionUz: dto.descriptionUz }),
-        ...(dto.descriptionRu !== undefined && { descriptionRu: dto.descriptionRu }),
-        ...(nextAttributes !== undefined && { attributes: nextAttributes as object }),
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.product.update({
+        where: { id: productId },
+        data: {
+          ...(dto.titleUz !== undefined && { titleUz: dto.titleUz }),
+          ...(dto.titleRu !== undefined && { titleRu: dto.titleRu }),
+          ...(dto.titleEn !== undefined && { titleEn: dto.titleEn }),
+          ...(dto.basePriceUsd !== undefined && { basePriceUsd: dto.basePriceUsd }),
+          ...(dto.descriptionUz !== undefined && { descriptionUz: dto.descriptionUz }),
+          ...(dto.descriptionRu !== undefined && { descriptionRu: dto.descriptionRu }),
+          ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
+          ...(dto.bodyFit !== undefined && { bodyFit: dto.bodyFit }),
+          ...(dto.coverUrl !== undefined && { coverUrl: dto.coverUrl }),
+          ...(nextAttributes !== undefined && { attributes: nextAttributes as object }),
+        },
+      });
+
+      // Variant edits. `id` present → update existing; absent → create new;
+      // `remove: true` → delete. Skips rows that don't belong to this product.
+      if (dto.variants?.length) {
+        const ownedIds = new Set(product.variants.map((v) => v.id));
+        for (const v of dto.variants) {
+          if (v.id && v.remove) {
+            if (!ownedIds.has(v.id)) continue;
+            await tx.productVariant.delete({ where: { id: v.id } });
+            continue;
+          }
+          if (v.id) {
+            if (!ownedIds.has(v.id)) continue;
+            await tx.productVariant.update({
+              where: { id: v.id },
+              data: {
+                ...(v.color !== undefined && { color: v.color }),
+                ...(v.colorHex !== undefined && { colorHex: v.colorHex }),
+                ...(v.size !== undefined && { size: v.size }),
+                ...(v.stock !== undefined && { stock: v.stock }),
+                ...(v.priceUsd !== undefined && { priceUsd: v.priceUsd }),
+                ...(v.images !== undefined && { images: v.images }),
+              },
+            });
+          } else if (v.color && v.colorHex && v.size) {
+            await tx.productVariant.create({
+              data: {
+                productId,
+                color: v.color,
+                colorHex: v.colorHex,
+                size: v.size,
+                stock: v.stock ?? 0,
+                priceUsd: v.priceUsd ?? undefined,
+                images: v.images ?? [],
+                sku: `${productId.slice(0, 6)}-${v.color}-${v.size}-${Date.now()}`
+                  .toUpperCase()
+                  .replace(/\s+/g, ''),
+              },
+            });
+          }
+        }
+      }
+      return row;
     });
+
     return { id: updated.id, status: updated.status };
   }
 

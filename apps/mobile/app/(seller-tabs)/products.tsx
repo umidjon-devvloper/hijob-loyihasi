@@ -9,6 +9,7 @@ import { Text } from '../../src/components/Text';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { api } from '../../src/api/client';
 import { sceneById, SCENES, type SceneId } from '../../src/lib/scenes';
+import * as ImagePicker from 'expo-image-picker';
 
 // Backend product status enum (prisma ProductStatus). "published" is what the
 // UI used to call "live"; "archived" and "rejected" are grouped under
@@ -406,6 +407,32 @@ export default function SellerProductsScreen() {
   );
 }
 
+const CATEGORIES = [
+  { id: 'scarves', label: { uz: "Ro'mol", ru: 'Платок', en: 'Scarf', ar: 'طرحة' } },
+  { id: 'dresses', label: { uz: "Ko'ylak", ru: 'Платье', en: 'Dress', ar: 'فستان' } },
+  { id: 'shoes',   label: { uz: 'Poyabzal', ru: 'Обувь', en: 'Shoes', ar: 'أحذية' } },
+  { id: 'bags',    label: { uz: 'Sumka', ru: 'Сумка', en: 'Bag', ar: 'حقيبة' } },
+  { id: 'accessories', label: { uz: 'Aksessuar', ru: 'Аксессуар', en: 'Accessory', ar: 'إكسسوار' } },
+] as const;
+
+const BODY_FITS = [
+  { id: 'slim',    label: { uz: "Ozg'in",  ru: 'Худая',   en: 'Slim',    ar: 'نحيف' } },
+  { id: 'regular', label: { uz: "O'rtacha", ru: 'Средняя', en: 'Regular', ar: 'متوسط' } },
+  { id: 'plus',    label: { uz: "To'la",   ru: 'Полная',  en: 'Plus',    ar: 'ممتلئ' } },
+] as const;
+
+interface FullVariant {
+  id?: string;
+  color: string;
+  colorHex: string;
+  size: string;
+  stock: number;
+  priceUsd: number | null;
+  images: string[];
+  remove?: boolean;
+  isNew?: boolean;
+}
+
 function EditProductModal({
   product,
   onClose,
@@ -418,10 +445,101 @@ function EditProductModal({
   L: (uz: string, ru: string, en: string, ar: string) => string;
 }) {
   const { colors, theme } = useTheme();
-  const [title, setTitle] = useState(product.titleRu || product.titleUz || '');
+  const lang = 'uz' as const;
+
+  // Fetch the full product so we can edit title_uz/ru, description, variants.
+  const { data: full, isLoading } = useQuery<any>({
+    queryKey: ['seller-product-full', product.id],
+    queryFn: async () => (await api.get(`/catalog/products/${product.id}`)).data,
+  });
+
+  const [titleUz, setTitleUz] = useState('');
+  const [titleRu, setTitleRu] = useState('');
+  const [descriptionRu, setDescriptionRu] = useState('');
   const [priceUsd, setPriceUsd] = useState(String(product.basePriceUsd));
+  const [categoryId, setCategoryId] = useState<string>('scarves');
+  const [bodyFit, setBodyFit] = useState<'slim' | 'regular' | 'plus' | null>(null);
   const [sceneId, setSceneId] = useState<SceneId | null>((product.sceneId as SceneId) ?? null);
+  const [variants, setVariants] = useState<FullVariant[]>([]);
+  const [coverUrl, setCoverUrl] = useState<string | null>(product.coverUrl);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Hydrate from the fetched product once it arrives.
+  const [hydrated, setHydrated] = useState(false);
+  if (full && !hydrated) {
+    setTitleUz(full.title?.uz ?? '');
+    setTitleRu(full.title?.ru ?? '');
+    setDescriptionRu(full.description ?? '');
+    setPriceUsd(String(full.basePriceUsd));
+    setCategoryId(full.categoryId ?? 'scarves');
+    setBodyFit(full.bodyFit ?? null);
+    setSceneId((full.attributes?.sceneId as SceneId) ?? null);
+    setCoverUrl(full.rawCoverUrl ?? full.coverUrl ?? null);
+    setVariants(
+      (full.variants ?? []).map((v: any) => ({
+        id: v.id,
+        color: v.color ?? '',
+        colorHex: v.colorHex ?? '#000000',
+        size: v.size ?? '',
+        stock: v.stock ?? 0,
+        priceUsd: v.priceUsd ?? null,
+        images: v.images ?? [],
+      })),
+    );
+    setHydrated(true);
+  }
+
+  const pickCover = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+    });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    setUploadingCover(true);
+    try {
+      const uri = picked.assets[0].uri;
+      const name = uri.split('/').pop() || 'img.jpg';
+      const ext = name.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+      const form = new FormData();
+      form.append('files', { uri, name, type: mime } as unknown as Blob);
+      const { data } = await api.post('/seller/uploads', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60_000,
+      });
+      const files = (data?.files ?? data) as Array<{ url: string }>;
+      if (files?.[0]?.url) setCoverUrl(files[0].url);
+    } catch (e: any) {
+      Alert.alert(L('Xato', 'Ошибка', 'Error', 'خطأ'), e?.message ?? 'xatolik');
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  const addVariant = () => {
+    setVariants((vs) => [
+      ...vs,
+      { color: '', colorHex: '#000000', size: 'M', stock: 0, priceUsd: null, images: [], isNew: true },
+    ]);
+  };
+
+  const updateVariant = (idx: number, patch: Partial<FullVariant>) => {
+    setVariants((vs) => vs.map((v, i) => (i === idx ? { ...v, ...patch } : v)));
+  };
+
+  const removeVariant = (idx: number) => {
+    setVariants((vs) => {
+      const row = vs[idx];
+      if (!row) return vs;
+      if (row.isNew) return vs.filter((_, i) => i !== idx);
+      return vs.map((v, i) => (i === idx ? { ...v, remove: true } : v));
+    });
+  };
+
+  const visibleVariants = variants.filter((v) => !v.remove);
 
   const save = async () => {
     const price = Number(priceUsd);
@@ -432,9 +550,24 @@ function EditProductModal({
     try {
       setSaving(true);
       await api.patch(`/seller/products/${product.id}`, {
-        titleRu: title.trim(),
+        titleUz: titleUz.trim(),
+        titleRu: titleRu.trim() || titleUz.trim(),
+        descriptionRu: descriptionRu.trim(),
         basePriceUsd: price,
-        sceneId: sceneId,
+        categoryId,
+        bodyFit,
+        coverUrl: coverUrl ?? undefined,
+        sceneId,
+        variants: variants.map((v) => ({
+          id: v.id,
+          color: v.color,
+          colorHex: v.colorHex,
+          size: v.size,
+          stock: v.stock,
+          priceUsd: v.priceUsd,
+          images: v.images,
+          remove: v.remove,
+        })),
       });
       onSaved();
     } catch (e: any) {
@@ -496,9 +629,9 @@ function EditProductModal({
                   resizeMode="cover"
                 />
               )}
-              {product.coverUrl && (
+              {coverUrl && (
                 <Image
-                  source={{ uri: product.coverUrl }}
+                  source={{ uri: coverUrl }}
                   style={{ width: '100%', height: '100%' }}
                   resizeMode="contain"
                 />
@@ -559,35 +692,86 @@ function EditProductModal({
               })}
             </View>
 
-            {/* Title */}
+            {/* Cover image upload */}
             <Text
               variant="caption"
               color="muted"
               style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}
             >
-              {L('Nomi', 'Название', 'Title', 'الاسم')}
+              {L('Asosiy rasm', 'Главное фото', 'Cover', 'الصورة الرئيسية')}
             </Text>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
+            <Pressable
+              onPress={pickCover}
+              disabled={uploadingCover}
               style={{
-                backgroundColor: colors.surface,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 10,
                 borderRadius: 12,
                 borderWidth: 1,
+                borderStyle: 'dashed',
                 borderColor: colors.rule,
-                paddingHorizontal: 12,
-                paddingVertical: 11,
-                fontSize: 14,
-                color: colors.ink,
                 marginBottom: 16,
               }}
+            >
+              {uploadingCover ? (
+                <ActivityIndicator color={colors.oliveDeep} size="small" />
+              ) : (
+                <Ionicons name="image-outline" size={18} color={colors.ink} />
+              )}
+              <Text style={{ fontSize: 13, color: colors.ink, fontWeight: '600' }}>
+                {L('Yangi rasm tanlash', 'Выбрать фото', 'Pick new image', 'اختر صورة')}
+              </Text>
+            </Pressable>
+
+            {/* Title UZ + RU */}
+            <Text
+              variant="caption"
+              color="muted"
+              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}
+            >
+              {L("Nomi (O'zbek)", 'Название (узбекский)', 'Title (UZ)', 'الاسم (الأوزبكية)')}
+            </Text>
+            <TextInput
+              value={titleUz}
+              onChangeText={setTitleUz}
+              style={inputStyle(colors)}
+            />
+            <Text
+              variant="caption"
+              color="muted"
+              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 12 }}
+            >
+              {L('Nomi (Rus)', 'Название (русский)', 'Title (RU)', 'الاسم (الروسية)')}
+            </Text>
+            <TextInput
+              value={titleRu}
+              onChangeText={setTitleRu}
+              style={inputStyle(colors)}
+            />
+
+            {/* Description */}
+            <Text
+              variant="caption"
+              color="muted"
+              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 12 }}
+            >
+              {L('Tavsif', 'Описание', 'Description', 'الوصف')}
+            </Text>
+            <TextInput
+              value={descriptionRu}
+              onChangeText={setDescriptionRu}
+              multiline
+              style={{ ...inputStyle(colors), minHeight: 80, textAlignVertical: 'top' }}
             />
 
             {/* Price */}
             <Text
               variant="caption"
               color="muted"
-              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}
+              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 12 }}
             >
               {L('Narx (USD)', 'Цена (USD)', 'Price (USD)', 'السعر (USD)')}
             </Text>
@@ -595,22 +779,162 @@ function EditProductModal({
               value={priceUsd}
               onChangeText={setPriceUsd}
               keyboardType="decimal-pad"
-              style={{
-                backgroundColor: colors.surface,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.rule,
-                paddingHorizontal: 12,
-                paddingVertical: 11,
-                fontSize: 14,
-                color: colors.ink,
-                marginBottom: 20,
-              }}
+              style={inputStyle(colors)}
             />
+
+            {/* Category chips */}
+            <Text
+              variant="caption"
+              color="muted"
+              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 16 }}
+            >
+              {L('Kategoriya', 'Категория', 'Category', 'الفئة')}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {CATEGORIES.map((c) => {
+                const active = c.id === categoryId;
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => setCategoryId(c.id)}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                      backgroundColor: active ? colors.oliveDeep : colors.surface,
+                      borderWidth: 1,
+                      borderColor: active ? colors.oliveDeep : colors.rule,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: active ? colors.goldSoft : colors.ink }}>
+                      {c.label.uz}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {/* Body fit chips */}
+            <Text
+              variant="caption"
+              color="muted"
+              style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 16 }}
+            >
+              {L('Jussa', 'Фигура', 'Body fit', 'الجسم')}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              {BODY_FITS.map((b) => {
+                const active = b.id === bodyFit;
+                return (
+                  <Pressable
+                    key={b.id}
+                    onPress={() => setBodyFit(active ? null : (b.id as any))}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                      backgroundColor: active ? colors.oliveDeep : colors.surface,
+                      borderWidth: 1,
+                      borderColor: active ? colors.oliveDeep : colors.rule,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: active ? colors.goldSoft : colors.ink }}>
+                      {b.label.uz}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Variants editor */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 8 }}>
+              <Text
+                variant="caption"
+                color="muted"
+                style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}
+              >
+                {L('Variantlar', 'Варианты', 'Variants', 'الخيارات')} ({visibleVariants.length})
+              </Text>
+              <Pressable onPress={addVariant} hitSlop={8}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.gold }}>
+                  + {L("Qo'shish", 'Добавить', 'Add', 'إضافة')}
+                </Text>
+              </Pressable>
+            </View>
+
+            {variants.map((v, idx) => {
+              if (v.remove) return null;
+              return (
+                <View
+                  key={v.id ?? `new-${idx}`}
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.rule,
+                    backgroundColor: colors.surface,
+                    marginBottom: 10,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: v.colorHex, borderWidth: 1, borderColor: colors.rule }} />
+                    <TextInput
+                      value={v.color}
+                      onChangeText={(x) => updateVariant(idx, { color: x })}
+                      placeholder={L('Rang nomi', 'Цвет', 'Color', 'اللون')}
+                      placeholderTextColor={colors.muted}
+                      style={{ ...inputStyle(colors), marginBottom: 0, flex: 1 }}
+                    />
+                    <TextInput
+                      value={v.colorHex}
+                      onChangeText={(x) => updateVariant(idx, { colorHex: x })}
+                      placeholder="#000000"
+                      placeholderTextColor={colors.muted}
+                      autoCapitalize="none"
+                      style={{ ...inputStyle(colors), marginBottom: 0, width: 100 }}
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                    <TextInput
+                      value={v.size}
+                      onChangeText={(x) => updateVariant(idx, { size: x })}
+                      placeholder={L("O'lcham", 'Размер', 'Size', 'الحجم')}
+                      placeholderTextColor={colors.muted}
+                      style={{ ...inputStyle(colors), marginBottom: 0, flex: 1 }}
+                    />
+                    <TextInput
+                      value={String(v.stock)}
+                      onChangeText={(x) => updateVariant(idx, { stock: Number(x) || 0 })}
+                      keyboardType="number-pad"
+                      placeholder={L('Zaxira', 'Остаток', 'Stock', 'المخزون')}
+                      placeholderTextColor={colors.muted}
+                      style={{ ...inputStyle(colors), marginBottom: 0, flex: 1 }}
+                    />
+                    <TextInput
+                      value={v.priceUsd != null ? String(v.priceUsd) : ''}
+                      onChangeText={(x) => updateVariant(idx, { priceUsd: x ? Number(x) : null })}
+                      keyboardType="decimal-pad"
+                      placeholder="USD"
+                      placeholderTextColor={colors.muted}
+                      style={{ ...inputStyle(colors), marginBottom: 0, flex: 1 }}
+                    />
+                  </View>
+                  <Pressable
+                    onPress={() => removeVariant(idx)}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                    <Text style={{ fontSize: 12, color: colors.danger, fontWeight: '600' }}>
+                      {L("O'chirish", 'Удалить', 'Delete', 'حذف')}
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            })}
 
             <Pressable
               onPress={save}
-              disabled={saving}
+              disabled={saving || isLoading}
               style={{
                 height: 52,
                 borderRadius: 16,
@@ -635,4 +959,18 @@ function EditProductModal({
       </View>
     </Modal>
   );
+}
+
+function inputStyle(colors: any) {
+  return {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.rule,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: colors.ink,
+    marginBottom: 0,
+  } as const;
 }
