@@ -456,9 +456,9 @@ export default function TryOnScreen() {
               {hero && (() => {
                 // Scarves: zoom into the head/scarf area so the hijab fills
                 // the frame like a studio portrait (matches the HIJAB STYLE
-                // reference the user asked for). The scaleY + translateY
-                // combination keeps the head anchored to the upper half
-                // and crops the body + feet out of view.
+                // reference the user asked for). Positive translateY shifts
+                // the image DOWN, bringing the TOP of the mannequin (head +
+                // hijab) into view instead of the body.
                 const isScarf =
                   ((selected as any)?.categoryId ?? '') === 'scarves';
                 return (
@@ -471,7 +471,7 @@ export default function TryOnScreen() {
                       left: 0,
                       right: 0,
                       transform: isScarf
-                        ? [{ scale: 1.7 }, { translateY: -70 }]
+                        ? [{ scale: 1.9 }, { translateY: 180 }]
                         : [],
                     }}
                     resizeMode={isScarf ? 'cover' : 'contain'}
@@ -976,7 +976,9 @@ function ProductThumb({
               bottom: 0,
               left: 0,
               right: 0,
-              transform: isScarf ? [{ scale: 1.7 }, { translateY: -25 }] : [],
+              // Shift down so the head anchors to the top of the thumbnail
+              // instead of the body cropping into view.
+              transform: isScarf ? [{ scale: 1.9 }, { translateY: 50 }] : [],
             }}
             resizeMode="cover"
           />
