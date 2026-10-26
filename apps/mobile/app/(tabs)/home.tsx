@@ -313,20 +313,29 @@ export default function HomeScreen() {
                 <View
                   style={{
                     position: 'absolute',
-                    top: -4,
-                    right: -4,
-                    minWidth: 18,
-                    height: 18,
-                    paddingHorizontal: 4,
-                    borderRadius: 9,
-                    backgroundColor: colors.gold,
+                    top: -6,
+                    right: -6,
+                    minWidth: 20,
+                    height: 20,
+                    paddingHorizontal: 5,
+                    borderRadius: 10,
+                    backgroundColor: '#C8102E',
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 2,
                     borderColor: colors.surface,
                   }}
                 >
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.ink }}>
+                  <Text
+                    allowFontScaling={false}
+                    style={{
+                      fontSize: 11,
+                      lineHeight: 13,
+                      fontWeight: '800',
+                      color: '#FFFFFF',
+                      textAlign: 'center',
+                    }}
+                  >
                     {tryonCount > 9 ? '9+' : String(tryonCount)}
                   </Text>
                 </View>
