@@ -206,6 +206,12 @@ export default function TryOnScreen() {
 
   const [lightIdx, setLightIdx] = useState(0);
   const lighting = LIGHTING[lightIdx] ?? LIGHTING[0];
+  // Zoom toggle — scarves default to the close-up (head + hijab) framing
+  // the user asked for; everything else defaults to the full-figure
+  // framing. Either way the buyer can toggle via the side action.
+  const [zoomedIn, setZoomedIn] = useState<boolean | null>(null);
+  const isScarf = ((selected as any)?.categoryId ?? '') === 'scarves';
+  const effectiveZoom = zoomedIn ?? isScarf;
 
   // Pre-rendered face-swapped mannequins keyed by variant id. The backend
   // queue (user-face-renders) builds one per variant the buyer could land
@@ -433,31 +439,22 @@ export default function TryOnScreen() {
             </View>
           ) : (
             <>
-              {hero && (() => {
-                // Scarves: zoom into the head/scarf area so the hijab fills
-                // the frame like a studio portrait (matches the HIJAB STYLE
-                // reference the user asked for). Positive translateY shifts
-                // the image DOWN, bringing the TOP of the mannequin (head +
-                // hijab) into view instead of the body.
-                const isScarf =
-                  ((selected as any)?.categoryId ?? '') === 'scarves';
-                return (
-                  <Image
-                    source={{ uri: hero.uri }}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      transform: isScarf
-                        ? [{ scale: 1.9 }, { translateY: 180 }]
-                        : [],
-                    }}
-                    resizeMode={isScarf ? 'cover' : 'contain'}
-                  />
-                );
-              })()}
+              {hero && (
+                <Image
+                  source={{ uri: hero.uri }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    transform: effectiveZoom
+                      ? [{ scale: 1.9 }, { translateY: 180 }]
+                      : [],
+                  }}
+                  resizeMode={effectiveZoom ? 'cover' : 'contain'}
+                />
+              )}
               {lighting.overlay && (
                 <View
                   pointerEvents="none"
@@ -490,6 +487,11 @@ export default function TryOnScreen() {
                   icon="sunny-outline"
                   label={lighting.label}
                   onPress={() => setLightIdx((i) => (i + 1) % LIGHTING.length)}
+                />
+                <SideAction
+                  icon={effectiveZoom ? 'contract-outline' : 'expand-outline'}
+                  label={effectiveZoom ? 'Uzoqlashtirish' : 'Yaqinlashtirish'}
+                  onPress={() => setZoomedIn(!effectiveZoom)}
                 />
               </View>
 
