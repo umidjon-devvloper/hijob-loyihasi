@@ -11,6 +11,7 @@ import { CreateProductDto } from './dto';
 import { CategoryId, ProductStatus } from '@prisma/client';
 import { StorageService } from '../storage/storage.service';
 import { GarmentCategory, MlGarmentClient } from './ml-garment.client';
+import { StyleJobsService } from '../style-jobs/style-jobs.service';
 
 const ALLOWED_MIME = new Set([
   'image/jpeg',
@@ -30,6 +31,7 @@ export class SellerService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly mlGarment: MlGarmentClient,
+    private readonly styleJobs: StyleJobsService,
   ) {}
 
   /**
@@ -443,6 +445,19 @@ export class SellerService {
     void this.buildGarmentTemplatesForProduct(created.id, dto.categoryId).catch((e) =>
       this.logger.error(`garment templates failed: ${e.message}`),
     );
+
+    // Auto-submit a dress-mannequin job so the seller doesn't have to
+    // run "Navbatga jo'natish" by hand just to get a styled card. The
+    // uploaded cover image is used as the hijab source; the default
+    // tyingStyle 'classical' matches the first chip on the picker.
+    // Best-effort — a failing job never blocks product creation; the
+    // seller can still re-submit from the product detail screen.
+    void this.styleJobs
+      .submit(userId, created.id, {
+        hijabUrl: dto.coverUrl,
+        tyingStyle: 'classical',
+      })
+      .catch((e) => this.logger.warn(`auto dress-mannequin failed: ${(e as Error).message}`));
 
     return { id: created.id };
   }
