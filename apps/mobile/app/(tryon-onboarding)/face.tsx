@@ -31,8 +31,12 @@ const BODY_LABELS: Record<BodyType, { label: string; sub: string }> = {
   full: { label: "To'la", sub: '(Biroz to\'la)' },
 };
 
+// Show the "Demo (simulator)" shortcut whenever we're not on a real
+// physical device. Expo Go reports executionEnvironment === 'storeClient'
+// even on the simulator, which used to hide the button there — drop that
+// clause so it also shows up when running through Expo Go on a simulator.
 const IS_SIMULATOR =
-  Platform.OS === 'ios' && !Constants.isDevice && Constants.executionEnvironment !== 'storeClient';
+  Platform.OS === 'ios' && !Constants.isDevice;
 
 export default function TryonFaceScreen() {
   const { colors, theme, scheme } = useTheme();
