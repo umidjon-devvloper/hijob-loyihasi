@@ -457,10 +457,10 @@ export default function TryOnScreen() {
                     // kept so empty space around the scaled figure still
                     // reads as the boutique.
                     transform: effectiveZoom
-                      ? [{ scale: 1.2 }, { translateY: 140 }]
+                      ? [{ scale: 1.5 }, { translateY: 80 }]
                       : [],
                   }}
-                  resizeMode={effectiveZoom ? 'cover' : 'contain'}
+                  resizeMode="contain"
                 />
               )}
               {lighting.overlay && (
