@@ -11,16 +11,16 @@
  *     → three renders are stored and the right one is shown per buyer size
  *
  * MANNEQUIN ORIENTATION RULE — IMPORTANT:
- *   Every mannequin reference MUST show the model facing camera or 3/4
- *   turned to the LEFT (viewer's left, so the model's RIGHT cheek is
- *   visible). This way FaceFusion has a clear, unobstructed face region
- *   to swap the buyer's face onto. If the model is turned to the right
- *   or looking away, the face swap mis-aligns and the buyer's face
- *   comes out distorted or absent.
+ *   Every mannequin reference MUST show the model turned to the viewer's
+ *   RIGHT at a three-quarter angle so the camera sees the right cheek
+ *   clearly, with the face still fully visible. Keeping the orientation
+ *   consistent across every size variant makes the catalogue read as
+ *   one shoot and gives FaceFusion a predictable face region to swap.
  *
  *   When regenerating these images with any AI image gen tool, include:
- *     "model facing camera, slight 3/4 turn to the left, face fully
- *      visible, eyes forward, no sunglasses, no veil over the face"
+ *     "model turned to the viewer's right at a three-quarter angle,
+ *      face fully visible, eyes forward, no sunglasses, no veil over
+ *      the face"
  *
  * Images are Pexels free-licence stand-ins. Replace with in-house shots
  * once the model-release pipeline is in place.

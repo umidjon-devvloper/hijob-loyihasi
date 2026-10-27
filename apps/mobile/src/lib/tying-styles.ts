@@ -28,7 +28,7 @@ export const TYING_STYLES: TyingStyleDef[] = [
     id: 'classical',
     label: { uz: 'Klassik', ru: 'Классический', en: 'Classical', ar: 'كلاسيكي' },
     prompt:
-      'classical hijab wrap, modest fit, the fabric covers the forehead and goes under the chin, both ends fall gently in front of the shoulders, no visible pins',
+      'elegant modest hijab styling: fabric wraps smoothly over the head, covers the forehead and goes under the chin, one long tail cascades asymmetrically over the LEFT shoulder down to below the chest in soft natural folds, the other side wraps close to the neckline, no visible pins or seams, matte studio lighting; mannequin orientation: body and face turned slightly to the viewer\'s RIGHT at a three-quarter angle so the camera sees the right cheek clearly, this orientation is MANDATORY for every size variant so the whole catalogue reads as one consistent shoot',
   },
   {
     id: 'loose',
