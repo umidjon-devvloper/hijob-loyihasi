@@ -509,27 +509,6 @@ export default function ProductScreen() {
               </Pressable>
             )}
 
-            {/* Open Primerka tab */}
-            <Pressable
-              onPress={() => router.push('/(tabs)/tryon')}
-              style={{
-                borderWidth: 1,
-                borderColor: colors.rule,
-                borderRadius: 14,
-                paddingVertical: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                marginBottom: 22,
-              }}
-            >
-              <Ionicons name="body-outline" size={18} color={colors.ink} />
-              <Text variant="bodySmall" style={{ fontSize: 13, fontWeight: '600', color: colors.ink }}>
-                Primerka xonasini ochish
-              </Text>
-            </Pressable>
-
             {/* Description */}
             <View style={{ marginBottom: 20 }}>
               <Text
@@ -598,35 +577,12 @@ export default function ProductScreen() {
           }}
         >
           <Pressable
-            onPress={() => router.push('/(tabs)/tryon')}
-            style={{
-              flex: 1,
-              height: 52,
-              borderRadius: 14,
-              backgroundColor: colors.surfaceAlt,
-              borderWidth: 1,
-              borderColor: colors.rule,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-            }}
-          >
-            <Ionicons name="body-outline" size={20} color={colors.ink} />
-            <Text
-              variant="bodySmall"
-              style={{ fontSize: 14, fontWeight: '600', color: colors.ink }}
-            >
-              Sinab ko'rish
-            </Text>
-          </Pressable>
-          <Pressable
             onPress={() => {
               const v = product.variants?.[0];
               if (v) addToCart.mutate(v.id);
             }}
             style={({ pressed }) => ({
-              flex: 1.3,
+              flex: 1,
               height: 52,
               borderRadius: 14,
               backgroundColor: colors.oliveDeep,
