@@ -206,12 +206,6 @@ export default function TryOnScreen() {
 
   const [lightIdx, setLightIdx] = useState(0);
   const lighting = LIGHTING[lightIdx] ?? LIGHTING[0];
-  // Zoom toggle — scarves default to the close-up (head + hijab) framing
-  // the user asked for; everything else defaults to the full-figure
-  // framing. Either way the buyer can toggle via the side action.
-  const [zoomedIn, setZoomedIn] = useState<boolean | null>(null);
-  const isScarf = ((selected as any)?.categoryId ?? '') === 'scarves';
-  const effectiveZoom = zoomedIn ?? isScarf;
 
   // Pre-rendered face-swapped mannequins keyed by variant id. The backend
   // queue (user-face-renders) builds one per variant the buyer could land
@@ -451,14 +445,6 @@ export default function TryOnScreen() {
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    // Zoom scales the mannequin up ~1.3x and nudges it
-                    // slightly down so the head stays fully in view
-                    // instead of being clipped at the top. Backdrop is
-                    // kept so empty space around the scaled figure still
-                    // reads as the boutique.
-                    transform: effectiveZoom
-                      ? [{ scale: 1.5 }, { translateY: 80 }]
-                      : [],
                   }}
                   resizeMode="contain"
                 />
@@ -495,11 +481,6 @@ export default function TryOnScreen() {
                   icon="sunny-outline"
                   label={lighting.label}
                   onPress={() => setLightIdx((i) => (i + 1) % LIGHTING.length)}
-                />
-                <SideAction
-                  icon={effectiveZoom ? 'contract-outline' : 'expand-outline'}
-                  label={effectiveZoom ? 'Uzoqlashtirish' : 'Yaqinlashtirish'}
-                  onPress={() => setZoomedIn(!effectiveZoom)}
                 />
               </View>
 
@@ -882,25 +863,13 @@ function ProductThumb({
         }}
         resizeMode="cover"
       />
-      {thumb && (() => {
-        const isScarf = (product.categoryId ?? '') === 'scarves';
-        return (
-          <Image
-            source={{ uri: thumb }}
-            style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0,
-              // Shift down so the head anchors to the top of the thumbnail
-              // instead of the body cropping into view.
-              transform: isScarf ? [{ scale: 1.9 }, { translateY: 50 }] : [],
-            }}
-            resizeMode="cover"
-          />
-        );
-      })()}
+      {thumb && (
+        <Image
+          source={{ uri: thumb }}
+          style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
+          resizeMode="cover"
+        />
+      )}
       {/* Heart / cart affordances used to sit on the thumbnail but they
           duplicated the primary CTAs already visible on the hero — the
           thumbnail now stays a pure "switch to this product" tap target. */}
