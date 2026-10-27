@@ -396,25 +396,22 @@ export default function TryOnScreen() {
             borderColor: colors.ruleSoft,
           }}
         >
-          {/* Fitting-room backdrop sits behind the mannequin render in
-              the normal (uzoqlashtirilgan) view. Hidden when the hero is
-              zoomed in so the enlarged mannequin fills the whole frame
-              and the backdrop doesn't peek through around the edges. */}
-          {!effectiveZoom && (
-            <Image
-              source={FITTING_ROOM}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                width: '100%',
-                height: '100%',
-              }}
-              resizeMode="cover"
-            />
-          )}
+          {/* Fitting-room backdrop stays visible in both framings so the
+              zoomed-in view still reads as a boutique shot instead of a
+              floating cutout. */}
+          <Image
+            source={FITTING_ROOM}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100%',
+              height: '100%',
+            }}
+            resizeMode="cover"
+          />
           {!selected ? (
             <View
               style={{
@@ -454,13 +451,13 @@ export default function TryOnScreen() {
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    // Zoom: scale up and shift the image DOWN just enough to
-                    // bring the head/scarf area to the vertical centre of
-                    // the hero without pushing the figure off the bottom.
-                    // Backdrop is hidden above so we don't see any empty
-                    // frame around the scaled mannequin.
+                    // Zoom scales the mannequin up ~1.3x and nudges it
+                    // slightly down so the head stays fully in view
+                    // instead of being clipped at the top. Backdrop is
+                    // kept so empty space around the scaled figure still
+                    // reads as the boutique.
                     transform: effectiveZoom
-                      ? [{ scale: 1.5 }, { translateY: 120 }]
+                      ? [{ scale: 1.3 }, { translateY: 40 }]
                       : [],
                   }}
                   resizeMode={effectiveZoom ? 'cover' : 'contain'}
