@@ -457,7 +457,7 @@ export default function TryOnScreen() {
                     // kept so empty space around the scaled figure still
                     // reads as the boutique.
                     transform: effectiveZoom
-                      ? [{ scale: 1.3 }, { translateY: 40 }]
+                      ? [{ scale: 1.3 }, { translateY: 90 }]
                       : [],
                   }}
                   resizeMode={effectiveZoom ? 'cover' : 'contain'}
