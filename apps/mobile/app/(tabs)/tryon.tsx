@@ -460,7 +460,7 @@ export default function TryOnScreen() {
                     // Backdrop is hidden above so we don't see any empty
                     // frame around the scaled mannequin.
                     transform: effectiveZoom
-                      ? [{ scale: 1.6 }, { translateY: 60 }]
+                      ? [{ scale: 1.5 }, { translateY: 120 }]
                       : [],
                   }}
                   resizeMode={effectiveZoom ? 'cover' : 'contain'}
