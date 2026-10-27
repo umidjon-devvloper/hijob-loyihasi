@@ -396,19 +396,25 @@ export default function TryOnScreen() {
             borderColor: colors.ruleSoft,
           }}
         >
-          <Image
-            source={FITTING_ROOM}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: '100%',
-              height: '100%',
-            }}
-            resizeMode="cover"
-          />
+          {/* Fitting-room backdrop sits behind the mannequin render in
+              the normal (uzoqlashtirilgan) view. Hidden when the hero is
+              zoomed in so the enlarged mannequin fills the whole frame
+              and the backdrop doesn't peek through around the edges. */}
+          {!effectiveZoom && (
+            <Image
+              source={FITTING_ROOM}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
+              }}
+              resizeMode="cover"
+            />
+          )}
           {!selected ? (
             <View
               style={{
@@ -448,8 +454,13 @@ export default function TryOnScreen() {
                     bottom: 0,
                     left: 0,
                     right: 0,
+                    // Zoom: scale up and shift the image DOWN just enough to
+                    // bring the head/scarf area to the vertical centre of
+                    // the hero without pushing the figure off the bottom.
+                    // Backdrop is hidden above so we don't see any empty
+                    // frame around the scaled mannequin.
                     transform: effectiveZoom
-                      ? [{ scale: 1.9 }, { translateY: 180 }]
+                      ? [{ scale: 1.6 }, { translateY: 60 }]
                       : [],
                   }}
                   resizeMode={effectiveZoom ? 'cover' : 'contain'}
