@@ -178,8 +178,32 @@ async function main() {
   });
   console.log(`✅ Shop: ${seller.brandName}`);
 
-  const buyer = await upsertUser(DEMO_BUYER, UserRole.buyer);
-  console.log(`✅ Buyer: ${buyer.phone} / ${buyer.username}\n`);
+  // Buyer akkountiga ham seller role beramiz — Apple reviewer bitta
+  // akkountdan ham xaridor ham sotuvchi tabini ko'ra oladi (role-
+  // switcher). Shop profili ham yarattamiz.
+  const buyer = await upsertUser(DEMO_BUYER, UserRole.seller);
+  console.log(`✅ Buyer (seller access): ${buyer.phone} / ${buyer.username}`);
+
+  await prisma.seller.upsert({
+    where: { userId: buyer.id },
+    update: {
+      brandName: 'Demo Shop (Buyer)',
+      description: 'Demo xaridor akkountining do\'koni',
+      verified: true,
+    },
+    create: {
+      userId: buyer.id,
+      brandName: 'Demo Shop (Buyer)',
+      description: 'Demo xaridor akkountining do\'koni',
+      verified: true,
+      rating: 5,
+      reviewsCount: 10,
+      country: 'Uzbekistan',
+      city: 'Toshkent',
+      district: 'Yunusobod',
+    },
+  });
+  console.log(`✅ Buyer uchun shop ham yaratildi\n`);
 
   console.log('🛒 Demo mahsulotlar yaratilmoqda...\n');
   await createDemoProducts(seller.id);
