@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "N24:31 Dev AI panel",
   "description": "Pending style-job'larni ChatGPT'da avto bajarib natijani serverga qaytaradi (loop)",
-  "version": "1.8.0",
+  "version": "1.9.2",
   "action": {
     "default_popup": "popup.html",
     "default_title": "N24:31 Dev AI",
@@ -27,9 +27,16 @@
     "http://localhost:4000/*",
     "https://*.trycloudflare.com/*",
     "https://*.n2431.app/*",
+    "https://*.2431.uz/*",
+    "https://2431.uz/*",
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
-    "https://*.oaiusercontent.com/*"
+    "https://*.oaiusercontent.com/*",
+    "https://*.cloudfront.net/*",
+    "https://*.amazonaws.com/*",
+    "https://*.digitaloceanspaces.com/*",
+    "https://*.r2.dev/*",
+    "https://*.r2.cloudflarestorage.com/*"
   ],
   "content_scripts": [
     {

@@ -13,7 +13,21 @@
 const KEEPALIVE = 'n2431-keepalive';
 const QUEUE_TICK = 'n2431-queue-tick';
 
-const DEFAULT_API_BASE = 'http://localhost:4000/api/v1';
+const DEFAULT_API_BASE = 'https://api.2431.uz/api/v1';
+
+// Any production host must be https — CORS preflight does not follow redirects,
+// so a saved http://api.2431.uz value would 301 to https and the browser
+// aborts the request. Transparently upgrade stored http:// values here.
+function sanitizeApiBase(url) {
+  if (!url) return DEFAULT_API_BASE;
+  const trimmed = url.trim();
+  if (!trimmed) return DEFAULT_API_BASE;
+  if (/^http:\/\/(localhost|127\.0\.0\.1|\[::1\]|.*\.local|.*\.test)(:|\/|$)/i.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^http:\/\//i.test(trimmed)) return trimmed.replace(/^http:\/\//i, 'https://');
+  return trimmed;
+}
 const CHATGPT_URL = 'https://chatgpt.com/?model=gpt-4o';
 const CHATGPT_HOST = 'https://chatgpt.com/*';
 
@@ -79,7 +93,11 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function getConfig() {
   const { apiBase, accessToken } = await chrome.storage.local.get(['apiBase', 'accessToken']);
-  return { apiBase: apiBase || DEFAULT_API_BASE, accessToken: accessToken || null };
+  const clean = sanitizeApiBase(apiBase);
+  if (clean !== apiBase) {
+    try { await chrome.storage.local.set({ apiBase: clean }); } catch {}
+  }
+  return { apiBase: clean, accessToken: accessToken || null };
 }
 
 async function hasSession() {
@@ -212,10 +230,41 @@ async function failJob(id, message) {
   return res.json();
 }
 
+// Loads the bundled hijab-style reference once per worker lifetime. The image
+// locks GPT onto the "head+neck wrap, nothing on chest" silhouette the user
+// wants — a job no amount of prose has reliably achieved.
+let STYLE_REF_CACHE = null;
+async function loadStyleReference() {
+  if (STYLE_REF_CACHE) return STYLE_REF_CACHE;
+  try {
+    const url = chrome.runtime.getURL('assets/hijab-style-reference.png');
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const base64 = await blobToBase64(blob);
+    STYLE_REF_CACHE = { base64, mime: blob.type || 'image/png' };
+    return STYLE_REF_CACHE;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchImageAsBlob(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`fetchImage HTTP ${res.status}`);
-  return res.blob();
+  // Upgrade http://api.2431.uz etc. to https — same reasoning as sanitizeApiBase.
+  const safeUrl = /^http:\/\/(?!localhost|127\.0\.0\.1|\[::1\]|.*\.local|.*\.test)/i.test(url)
+    ? url.replace(/^http:\/\//i, 'https://')
+    : url;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 30_000);
+  try {
+    const res = await fetch(safeUrl, { signal: ctrl.signal, redirect: 'follow' });
+    if (!res.ok) throw new Error(`fetchImage HTTP ${res.status} (${safeUrl})`);
+    return await res.blob();
+  } catch (e) {
+    throw new Error(`fetchImage failed (${safeUrl}): ${e?.message ?? e}`);
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 async function blobToBase64(blob) {
@@ -425,16 +474,26 @@ function finalOutput(chroma) {
 // to the pre-refactor prompt so quality on the main category never drifts.
 function buildScarfPrompt(job) {
   const chroma = chromaFor(job.colorHex);
+  // Current drape rule — ends TUCKED BEHIND the shoulders, nothing on the
+  // chest. The STYLE REFERENCE photo attached first makes the silhouette
+  // concrete; this text keeps GPT from reverting to its triangular default.
   const style =
     job.tyingStyle === 'loose' ? 'loose, flowing drape style' :
     job.tyingStyle === 'double' ? 'double-layered formal style' :
-    'classical neat wrap style';
+    "modest classical hijab styling: smooth wrap over the head covering the forehead and ears, passing closely under the chin and around the neck; both ends tucked BEHIND the shoulders; NO fabric falling onto the chest, shoulders in front, or dress collar";
   // targetSize is the SCARF dimension in cm (e.g. "110x110"), not a body size.
   const scarfLine = job.targetSize
-    ? `Scarf size: ${job.targetSize} cm — show the full fabric length draping down in every panel.`
-    : 'Scarf size: standard square — show the full fabric length draping down in every panel.';
+    ? `Scarf size: ${job.targetSize} cm — fabric wraps the head and neck only; its length is tucked behind the shoulders out of view.`
+    : 'Scarf size: standard square — fabric wraps the head and neck only; its length is tucked behind the shoulders out of view.';
   return [
-    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each wearing THE SAME hijab from the attached reference image.',
+    '*** CRITICAL HIJAB RULE (read first, applies to every cell) ***',
+    'The hijab fabric covers the HEAD AND NECK ONLY. NO fabric drapes onto the chest, shoulders in front, or the dress collar. Both ends of the scarf are tucked BEHIND the shoulders and are not visible from the front. The dress collar / neckline / chest area is 100% visible. Any cell whose hijab extends below the collarbone is rejected by the downstream filter. See the FIRST attached image (STYLE-REFERENCE) for the exact wrap silhouette.',
+    '',
+    'TWO reference images are attached (IN THIS ORDER):',
+    '  (1) STYLE-REFERENCE-copy-this-wrap.png — a model wearing a navy dress and a cream head/neck wrap. This is the EXACT hijab silhouette to reproduce in every cell. Copy ONLY the wrap shape — ignore the reference\'s colour, dress and face.',
+    '  (2) fabric-swatch-color-only.jpg — colour, pattern and texture reference for the hijab fabric. Apply this fabric onto the wrap shape from reference (1). Do NOT reshape it into a shawl or chest drape.',
+    '',
+    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each wearing a hijab that matches reference (1)\'s SHAPE and reference (2)\'s COLOUR/PATTERN.',
     '',
     'ARRANGE them in a 3×3 grid (3 rows × 3 columns), SAME baseline per row, SAME lighting, equal gaps between cells, EQUAL cell size so the image can be cut cleanly into 9 pieces.',
     '',
@@ -471,13 +530,14 @@ function buildScarfPrompt(job) {
     'Pose (SAME in every cell) — relaxed boutique fitting-room pose like a fashion catalogue photo, NOT a stiff passport pose:',
     '• Body turned about 20° to the side (three-quarter view), face turned back toward the camera.',
     '• Weight on one leg, the other knee softly relaxed; shoulders soft; elegant, confident posture.',
-    '• One hand lightly touching the hijab edge at chest level (fingers visible, NOT covering the face and NOT hiding the hijab pattern); the other arm relaxed along the body.',
+    '• Both arms relaxed along the body (NOT touching the hijab, NOT crossed in front of the chest). Hands rest naturally near the hips.',
     '• Elbows and hands stay close to the body so the whole figure fits inside its own cell and never reaches into a neighbouring cell.',
     '',
-    'Hijab (every cell):',
-    '• Use the attached HIJAB image as the fabric reference — preserve its colour, pattern and texture EXACTLY in every one of the 9 cells.',
-    '• Drape the hijab naturally around the head, shoulders, and chest over the beige dress; same drape in every cell.',
-    '• The dress and shoes beneath remain fully visible — no bare skin exposed anywhere.',
+    'Hijab (MANDATORY — identical in every cell, see STYLE-REFERENCE image attached first):',
+    '• Shape: COPY the head-and-neck wrap silhouette from the STYLE-REFERENCE photo EXACTLY. Fabric covers the top of the head, forehead and ears, passes closely under the chin and around the neck. Both ends are tucked BEHIND the shoulders and not visible from the front.',
+    '• Fabric colour / pattern / texture: from the FABRIC-SWATCH image (reference 2) — preserve EXACTLY. Apply this fabric onto the wrap shape from reference (1).',
+    '• Hard rule: NO fabric drapes onto the chest, onto the front of the shoulders, or onto the dress collar. The dress neckline and the model\'s chest area are 100% visible, uncovered by hijab fabric. The bottom edge of visible hijab sits HIGH on the neck, roughly at the base of the throat.',
+    '• The dress and shoes remain fully visible — no bare skin exposed anywhere.',
     '',
     'Background (CRITICAL — the mobile app draws its OWN boutique scene behind every mannequin, so this image must NOT contain any scene, room, or dark colour that could ever appear on a hijab):',
     `• Behind every model draw a SOLID FLAT ${chroma.name} SCREEN — fill every non-model pixel with ${chroma.hex} ${chroma.hex === '#00B140' ? '(bright chroma green)' : '(bright chroma magenta)'}. The same flat colour fills EVERY pixel that is not part of the model herself — no gradient, no texture, no vignette, no scene, no ground.`,
@@ -496,7 +556,13 @@ function buildDressPrompt(job) {
     ? `Dress size: ${job.targetSize} — tailor the fit to this size's silhouette in every cell.`
     : 'Dress size: standard — natural tailored fit in every cell.';
   return [
-    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING THE SAME DRESS from the attached reference image.',
+    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING THE SAME DRESS from the attached dress reference image.',
+    '',
+    'TWO reference images are attached (in this exact order):',
+    '  (1) STYLE-REFERENCE-copy-this-wrap.png — a model in a navy dress wearing a cream head-and-neck wrap. This is a POSE / SILHOUETTE REFERENCE. COPY the head-and-neck wrap shape from this photo EXACTLY in every one of the 9 cells. The hijab in this reference covers the head and wraps closely around the neck; the ends are tucked behind the shoulders; the front of the dress and the collar are fully visible with NO fabric draping onto the chest. REPRODUCE THIS EXACT SILHOUETTE. Do NOT copy the reference\'s colours, dress or face — only the wrap shape.',
+    '  (2) fabric-swatch-color-only.jpg — colour / pattern / texture reference for the hijab fabric only. Use its colour on the head+neck wrap. DO NOT reshape the fabric into a shawl or chest drape.',
+    '',
+    'STRICT RULE: the final hijab silhouette must match reference (1), with the colour of reference (2). Any variant whose hijab drapes below the collarbone is wrong.',
     '',
     ...GRID_ROWS_COLS,
     '',
@@ -508,20 +574,27 @@ function buildDressPrompt(job) {
     ...gridGutters(chroma),
     '',
     ...COMMON_MODEL_IDENTITY,
-    '• Head covered with a plain neutral SOFT BEIGE / CREAM hijab (#e8dcc6), simply draped around the head, shoulders and chest. This hijab is NOT the product — it is only there to cover the head modestly. Keep it plain, no pattern.',
+    '• HEAD + NECK COVER (MANDATORY — identical in every cell, DO NOT render as a shawl or scarf):',
+    '  — Material: plain matte SOFT BEIGE / CREAM fabric (#e8dcc6), no pattern, no sheen.',
+    "  — Garment shape: a fitted BALACLAVA-STYLE head cover combined with a short MOCK-TURTLENECK COLLAR. Think of a one-piece sport balaclava, or a nun's wimple, or a snug ninja hood — NOT a shawl, NOT a stole, NOT a scarf hanging on the chest.",
+    '  — Head part: smooth, close-fitting cap over the skull, fully covering hair / forehead / ears. No loose fabric around the face oval.',
+    '  — Neck part: a short tube of the same fabric around the neck, ending HIGH at the base of the throat (collar height, roughly 2 cm above the collarbone). The bottom edge of the fabric is a clean horizontal line at throat level — like the top edge of a mock-neck sweater.',
+    '  — ABSOLUTELY NO fabric descends onto the chest, onto the shoulders in front, or over the dress neckline. Zero drape, zero folds, zero triangular panels. Collarbone and dress collar visible immediately below the fabric edge.',
+    '  — Symmetric on both sides.',
     '• Plain BEIGE closed flat shoes on the feet — no bare feet (unless the dress itself has an integrated shoe/leg detail).',
     '',
     'Dress (every cell — the PRODUCT being showcased):',
     '• Use the attached DRESS image as the garment reference — preserve its colour, pattern, fabric texture, neckline, sleeves, length and silhouette EXACTLY in every one of the 9 cells.',
     '• The model wears the dress as the primary visible garment, covering her from the neckline shown in the reference down to the hem shown in the reference.',
     '• If the dress is sleeveless, add a plain beige modest under-layer (long-sleeve top in #e8dcc6) so the arms remain covered — but the dress itself stays on top and fully visible.',
-    '• Dress fully visible from neckline to hem; no hands or hijab covering the dress pattern.',
+    '• Dress fully visible from neckline (including buttons / collar details) all the way down to the hem; no hands and no hijab fabric covering the front of the dress.',
     '',
-    'Pose (SAME in every cell) — relaxed boutique fitting-room pose like a fashion catalogue photo:',
-    '• Body turned about 20° to the side (three-quarter view), face turned back toward the camera.',
-    '• Weight on one leg, the other knee softly relaxed; shoulders soft; elegant posture that shows the dress silhouette clearly.',
-    '• Both arms relaxed along the body (NOT crossed in front of the dress, NOT holding anything in front of the dress).',
+    'Pose (SAME in every cell — MANDATORY, identical orientation across the whole 9-grid):',
+    "• Body and face BOTH turned slightly to the viewer's RIGHT at a three-quarter angle (~15–20°) so the camera clearly sees the model's RIGHT cheek. NEVER turned to the left, NEVER full-front, NEVER in profile.",
+    '• Full-body standing, feet almost together with weight gently on one leg, shoulders soft, elegant upright posture that shows the dress silhouette clearly.',
+    '• Both arms relaxed along the body (NOT crossed in front of the dress, NOT holding anything in front of the dress, NOT touching the hijab).',
     '• Elbows and hands stay close to the body so the whole figure fits inside its own cell and the dress is unobstructed.',
+    '• Soft closed-mouth smile, eyes to camera.',
     '',
     ...commonBackground(chroma, 'dress'),
     '',
@@ -671,14 +744,19 @@ async function runOne(job) {
 
   try {
     // 1. Fetch hijob bytes (background has host_permissions so no CORS).
-    note('⬇ hijob fetching…');
+    note(`⬇ hijob fetching… ${String(job.hijabUrl ?? '').slice(0, 60)}`);
     const hijabBlob = await fetchImageAsBlob(job.hijabUrl);
+    note(`✓ hijob fetched (${Math.round((hijabBlob.size || 0) / 1024)} KB)`);
     const hijabBase64 = await blobToBase64(hijabBlob);
+    note('✓ hijob encoded');
 
     // 2. Open/reset ChatGPT tab.
+    note('↻ ensureTab…');
     const tabId = await ensureTab();
+    note(`✓ tab #${tabId}`);
     note('↺ fresh chat opening…');
     await freshChat(tabId);
+    note('✓ fresh chat ready');
 
     // 3. Hand the DRESS request to the content script via a long-lived
     // port. The port keeps the service worker alive for the whole render.
@@ -686,15 +764,17 @@ async function runOne(job) {
     // variants; the content script slices it before replying.
     note('✏ GPT ga 3×3 grid yuborilyapti…');
     const prompt = buildPrompt(job);
-    // GPT now bakes the boutique scene into every cell, so we skip the
-    // chroma-key composite pass. loadScene() + placeOnScene over-cropped
-    // and left a black band on the right whenever GPT drew the figure off-
-    // center. Passing scene: null tells the content script to just slice.
+    const styleRef = await loadStyleReference();
+    note(styleRef
+      ? `✓ style reference loaded (${Math.round((styleRef.base64.length * 3) / 4 / 1024)} KB)`
+      : '⚠ style reference MISSING — attach failed');
     const resp = await askContentPort(tabId, {
       type: 'DRESS',
       prompt,
       hijabBase64,
       hijabMime: hijabBlob.type || 'image/jpeg',
+      styleRefBase64: styleRef?.base64 ?? null,
+      styleRefMime: styleRef?.mime ?? null,
       scene: null,
       gridKeys: BASE_GRID_KEYS,
       rows: 3,

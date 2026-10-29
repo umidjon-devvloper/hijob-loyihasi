@@ -4,7 +4,21 @@
  * service worker can attach it to subsequent /admin/* requests.
  */
 
-const DEFAULT_API_BASE = 'http://localhost:4000/api/v1';
+const DEFAULT_API_BASE = 'https://api.2431.uz/api/v1';
+
+// Preflight requests cannot follow redirects, so a saved http://api.2431.uz
+// value would 301 to https and the browser aborts. Upgrade non-local http://
+// origins to https:// transparently.
+function sanitizeApiBase(url) {
+  if (!url) return DEFAULT_API_BASE;
+  const trimmed = url.trim();
+  if (!trimmed) return DEFAULT_API_BASE;
+  if (/^http:\/\/(localhost|127\.0\.0\.1|\[::1\]|.*\.local|.*\.test)(:|\/|$)/i.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^http:\/\//i.test(trimmed)) return trimmed.replace(/^http:\/\//i, 'https://');
+  return trimmed;
+}
 
 const apiBaseInput = document.getElementById('api-base');
 const identifierInput = document.getElementById('identifier');
@@ -24,7 +38,11 @@ function setStatus(el, text, kind) {
 
 async function load() {
   const { apiBase, accessToken, user } = await chrome.storage.local.get(['apiBase', 'accessToken', 'user']);
-  apiBaseInput.value = apiBase || DEFAULT_API_BASE;
+  const clean = sanitizeApiBase(apiBase);
+  if (clean !== apiBase) {
+    try { await chrome.storage.local.set({ apiBase: clean }); } catch {}
+  }
+  apiBaseInput.value = clean;
   if (accessToken && user) {
     loggedInEl.style.display = '';
     loggedOutEl.style.display = 'none';
@@ -36,11 +54,14 @@ async function load() {
 }
 
 apiBaseInput.addEventListener('change', async () => {
-  await chrome.storage.local.set({ apiBase: apiBaseInput.value.trim() || DEFAULT_API_BASE });
+  const clean = sanitizeApiBase(apiBaseInput.value);
+  apiBaseInput.value = clean;
+  await chrome.storage.local.set({ apiBase: clean });
 });
 
 loginBtn.addEventListener('click', async () => {
-  const apiBase = apiBaseInput.value.trim() || DEFAULT_API_BASE;
+  const apiBase = sanitizeApiBase(apiBaseInput.value);
+  apiBaseInput.value = apiBase;
   const identifier = identifierInput.value.trim();
   const password = passwordInput.value;
   if (!identifier || !password) {

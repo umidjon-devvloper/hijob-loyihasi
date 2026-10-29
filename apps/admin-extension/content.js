@@ -97,26 +97,46 @@
 
   // ─── Core: run one DRESS task ──────────────────────────────────────
 
-  async function runDress({ prompt, hijabBase64, hijabMime, timeoutMs = 180_000 }) {
+  async function runDress({ prompt, hijabBase64, hijabMime, styleRefBase64, styleRefMime, timeoutMs = 180_000 }) {
     tick('⏳ ChatGPT textarea izlanmoqda…');
     if (!(await waitForComposer(15_000))) throw new Error('composer topilmadi');
 
     tick('✏️ Prompt yozilmoqda…');
     if (!(await fillPrompt(prompt))) throw new Error('prompt yozib bo\'lmadi');
 
+    // Attach the STYLE REFERENCE FIRST — GPT-4o weights the first attached
+    // image more heavily, which is exactly what we want for silhouette.
+    if (styleRefBase64) {
+      tick('📎 Style reference biriktirilmoqda…');
+      const refBin = Uint8Array.from(atob(styleRefBase64), (c) => c.charCodeAt(0));
+      const refFile = new File(
+        [new Blob([refBin], { type: styleRefMime || 'image/png' })],
+        'STYLE-REFERENCE-copy-this-wrap.png',
+        { type: styleRefMime || 'image/png' },
+      );
+      if (!(await attachFile(refFile))) throw new Error('style reference biriktirib bo\'lmadi');
+    }
+
     tick('📎 Hijob biriktirilmoqda…');
     const bin = Uint8Array.from(atob(hijabBase64), (c) => c.charCodeAt(0));
-    const file = new File([new Blob([bin], { type: hijabMime })], 'hijob.jpg', { type: hijabMime });
+    const file = new File([new Blob([bin], { type: hijabMime })], 'fabric-swatch-color-only.jpg', { type: hijabMime });
     if (!(await attachFile(file))) throw new Error('fayl biriktirib bo\'lmadi');
 
     tick('⏳ Attachment preview kutilmoqda…');
     await waitForAttachment(10_000);
 
-    // Pixel fingerprint of the hijab we're sending. After send ChatGPT
-    // re-renders it in the user bubble under a NEW server URL (not the
-    // composer's blob:), so the `before` set alone can't exclude it — we
-    // compare pixels instead and never hand the hijab back as the result.
+    // Fingerprint every attachment we send so none can be mistaken for the
+    // generated result. GPT sometimes echoes a reference back verbatim —
+    // without this guard the slicer would cut up our reference photo and
+    // ship it to the seller as the catalogue.
     const hijabPrint = await fingerprintBlob(file).catch(() => null);
+    const avoidPrints = [hijabPrint];
+    if (styleRefBase64) {
+      const refBin2 = Uint8Array.from(atob(styleRefBase64), (c) => c.charCodeAt(0));
+      const refBlob = new Blob([refBin2], { type: styleRefMime || 'image/png' });
+      const refPrint = await fingerprintBlob(refBlob).catch(() => null);
+      if (refPrint) avoidPrints.push(refPrint);
+    }
 
     // Snapshot every image on the page BEFORE send — anything already
     // visible (old chat images, composer preview) is not a new result.
@@ -126,7 +146,7 @@
     if (!(await clickSend())) throw new Error('send tugmasi topilmadi');
 
     tick('⏳ GPT javobini kutmoqda…');
-    const url = await waitForAssistantImage(before, timeoutMs, hijabPrint);
+    const url = await waitForAssistantImage(before, timeoutMs, avoidPrints);
     if (!url) throw new Error(`GPT ${timeoutMs/1000}s ichida rasm chiqarmadi`);
 
     tick('✓ Rasm olindi');
@@ -1065,7 +1085,11 @@
     return (turn.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   }
 
-  async function waitForAssistantImage(before, timeoutMs, avoidPrint = null) {
+  async function waitForAssistantImage(before, timeoutMs, avoidPrints = null) {
+    // Back-compat: allow a single print or an array.
+    const avoidList = Array.isArray(avoidPrints)
+      ? avoidPrints.filter(Boolean)
+      : (avoidPrints ? [avoidPrints] : []);
     const deadline = Date.now() + timeoutMs;
 
     // Phase 1 — REQUIRE that GPT actually starts streaming. Without this
@@ -1106,10 +1130,10 @@
         .sort((a, b) => b.area - a.area);
       for (const { img } of fresh) {
         const url = img.currentSrc || img.src;
-        if (avoidPrint) {
+        if (avoidList.length) {
           const print = await fingerprintUrl(url).catch(() => null);
-          if (print && isSameImage(print, avoidPrint)) {
-            console.log('[N24:31] skipping hijab echo', url);
+          if (print && avoidList.some((p) => isSameImage(print, p))) {
+            console.log('[N24:31] skipping attachment echo', url);
             echoes.add(url);
             sawEcho = true;
             continue;
