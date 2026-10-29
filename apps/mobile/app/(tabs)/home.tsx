@@ -718,7 +718,7 @@ export default function HomeScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 }}>
                       <Ionicons name="star" size={11} color={colors.gold} />
                       <Text variant="caption" style={{ fontSize: 11, color: premium ? 'rgba(245,241,232,0.7)' : colors.muted }}>
-                        {s.rating.toFixed(1)} · {s.reviewsCount}
+                        {Number(s.rating ?? 0).toFixed(1)} · {s.reviewsCount ?? 0}
                       </Text>
                       {s.city && (
                         <Text variant="caption" style={{ fontSize: 11, color: premium ? 'rgba(245,241,232,0.5)' : colors.muted }}>
