@@ -146,6 +146,48 @@ async function createDemoProducts(sellerId: string) {
   }
 }
 
+/**
+ * Demo buyer uchun face onboarding'ni tashlab o'tish uchun — har bir
+ * published variant uchun UserFaceRender yaratamiz, URL sifatida xuddi
+ * mahsulotning styledImageUrl (yoki coverUrl) ni ishlatamiz. Shunda
+ * Apple reviewer selfie olmay turib Primerka tabida manekenlarni darhol
+ * ko'ra oladi.
+ */
+async function seedDemoBuyerRenders(userId: string) {
+  const variants = await prisma.productVariant.findMany({
+    where: { product: { status: ProductStatus.published } },
+    include: { product: { select: { styledImageUrl: true, coverUrl: true } } },
+  });
+  if (!variants.length) {
+    console.log('⚠️  Variant topilmadi, render yaratish o\'tkazib yuborildi');
+    return;
+  }
+
+  // User'ni tryon'ga tayyor deb belgilaymiz (selfie yo'q, lekin body
+  // params bor — Primerka tab shu bilan ishlaydi).
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      tryonBodyType: 'medium',
+      tryonHeightCm: 168,
+      // selfieKey = null — face swap qilinmaydi, maneken o'zi ko'rinadi.
+    },
+  });
+
+  let created = 0;
+  for (const v of variants) {
+    const url = v.product.styledImageUrl ?? v.product.coverUrl;
+    if (!url) continue;
+    await prisma.userFaceRender.upsert({
+      where: { userId_variantId: { userId, variantId: v.id } },
+      update: { url },
+      create: { userId, variantId: v.id, url },
+    });
+    created++;
+  }
+  console.log(`✅ Demo buyer uchun ${created} ta "render" (face-swap yo'q) yaratildi`);
+}
+
 async function main() {
   console.log('🌱 Demo akkountlar yaratilmoqda...\n');
 
@@ -207,6 +249,9 @@ async function main() {
 
   console.log('🛒 Demo mahsulotlar yaratilmoqda...\n');
   await createDemoProducts(seller.id);
+
+  console.log('\n🧵 Demo buyer uchun manekenlar...');
+  await seedDemoBuyerRenders(buyer.id);
 
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📱 APP STORE REVIEW UCHUN:');

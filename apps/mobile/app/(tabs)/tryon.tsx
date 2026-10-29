@@ -84,6 +84,37 @@ export default function TryOnScreen() {
   const storeId = useTryonOnboarding((s) => s.storeId);
   const bodyType = useTryonOnboarding((s) => s.bodyType);
   const heightCm = useTryonOnboarding((s) => s.heightCm);
+  const setBodyType = useTryonOnboarding((s) => s.setBodyType);
+  const setHeight = useTryonOnboarding((s) => s.setHeight);
+  const markComplete = useTryonOnboarding((s) => s.markComplete);
+
+  // Fast-path for demo / pre-seeded accounts: if the server already has
+  // body params + at least one render for this user, mark local
+  // onboarding complete so Primerka opens straight into the mannequins
+  // without forcing the camera flow. Apple reviewers see the catalogue
+  // immediately; real users still get the full onboarding on their
+  // first visit (server returns null bodyType + 0 renders for them).
+  useEffect(() => {
+    if (!tryonHydrated || tryonCompleted) return;
+    (async () => {
+      try {
+        const { data } = await api.get<{
+          hasSelfie: boolean;
+          bodyType: 'slim' | 'medium' | 'full' | null;
+          heightCm: number | null;
+          renders: Array<{ variantId: string; url: string }>;
+        }>('/tryon/my-renders');
+        if ((data?.renders?.length ?? 0) > 0 && data.bodyType) {
+          await setBodyType(data.bodyType as any);
+          if (data.heightCm) await setHeight(data.heightCm);
+          await markComplete();
+        }
+      } catch {
+        // Non-fatal — the useFocusEffect below will route to onboarding
+        // for brand-new users as before.
+      }
+    })();
+  }, [tryonHydrated, tryonCompleted, setBodyType, setHeight, markComplete]);
 
   useFocusEffect(
     useCallback(() => {
