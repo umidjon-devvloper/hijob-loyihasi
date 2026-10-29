@@ -88,14 +88,16 @@ export default function TryOnScreen() {
   const setHeight = useTryonOnboarding((s) => s.setHeight);
   const markComplete = useTryonOnboarding((s) => s.markComplete);
 
-  // Fast-path for demo / pre-seeded accounts: if the server already has
-  // body params + at least one render for this user, mark local
-  // onboarding complete so Primerka opens straight into the mannequins
-  // without forcing the camera flow. Apple reviewers see the catalogue
-  // immediately; real users still get the full onboarding on their
-  // first visit (server returns null bodyType + 0 renders for them).
+  // Fast-path for demo / pre-seeded accounts: before redirecting to the
+  // onboarding camera flow, check the server once — if it already has
+  // body params + at least one render for this user (demo buyer, or any
+  // account that already finished onboarding on another device), mark
+  // local onboarding complete and let Primerka open straight into the
+  // mannequin carousel. Brand-new users return null bodyType / 0 renders
+  // and fall through to the onboarding redirect as before.
+  const [serverChecked, setServerChecked] = useState(false);
   useEffect(() => {
-    if (!tryonHydrated || tryonCompleted) return;
+    if (!tryonHydrated || tryonCompleted || serverChecked) return;
     (async () => {
       try {
         const { data } = await api.get<{
@@ -112,16 +114,21 @@ export default function TryOnScreen() {
       } catch {
         // Non-fatal — the useFocusEffect below will route to onboarding
         // for brand-new users as before.
+      } finally {
+        setServerChecked(true);
       }
     })();
-  }, [tryonHydrated, tryonCompleted, setBodyType, setHeight, markComplete]);
+  }, [tryonHydrated, tryonCompleted, serverChecked, setBodyType, setHeight, markComplete]);
 
   useFocusEffect(
     useCallback(() => {
-      if (tryonHydrated && !tryonCompleted) {
+      // Only redirect once the server check has settled, so a demo /
+      // pre-seeded account doesn't get bounced into the camera flow
+      // between tryonHydrated=true and the fast-path markComplete call.
+      if (tryonHydrated && serverChecked && !tryonCompleted) {
         router.replace('/(tryon-onboarding)/height');
       }
-    }, [tryonHydrated, tryonCompleted, router]),
+    }, [tryonHydrated, serverChecked, tryonCompleted, router]),
   );
 
   // Items the buyer collected across different shops. Only clothing
