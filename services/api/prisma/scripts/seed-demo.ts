@@ -36,17 +36,28 @@ async function upsertUser(
   role: UserRole,
 ) {
   const passwordHash = await bcrypt.hash(spec.password, 10);
-  return prisma.user.upsert({
-    where: { phone: spec.phone },
-    update: {
-      role,
-      username: spec.username,
-      passwordHash,
-      isActive: true,
-      phoneVerified: true,
-      fullName: spec.fullName,
-    },
-    create: {
+  // Phone OR username — xar ikkala field unique, shuning uchun oldin
+  // ikkisidan birortasida bor-yo'qligini tekshiramiz. Bo'lsa — update,
+  // yo'q bo'lsa — create.
+  const existing = await prisma.user.findFirst({
+    where: { OR: [{ phone: spec.phone }, { username: spec.username }] },
+  });
+  if (existing) {
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        phone: spec.phone,
+        username: spec.username,
+        passwordHash,
+        role,
+        isActive: true,
+        phoneVerified: true,
+        fullName: spec.fullName,
+      },
+    });
+  }
+  return prisma.user.create({
+    data: {
       phone: spec.phone,
       username: spec.username,
       passwordHash,
