@@ -53,6 +53,10 @@ async function upsertUser(
         isActive: true,
         phoneVerified: true,
         fullName: spec.fullName,
+        // App Store reviewer uchun: xaridor onboarding'ini (face + body)
+        // skip qilamiz, ilova to'g'ridan to'g'ri ichkariga kirsin.
+        onboardingFaceDone: true,
+        onboardingBodyDone: true,
       },
     });
   }
@@ -66,6 +70,8 @@ async function upsertUser(
       phoneVerified: true,
       fullName: spec.fullName,
       language: 'uz',
+      onboardingFaceDone: true,
+      onboardingBodyDone: true,
     },
   });
 }

@@ -18,13 +18,20 @@ export default function Splash() {
 
   if (!isLoading) {
     if (!isAuthed) return <Redirect href="/(auth)/welcome" />;
-    // Sellers skip buyer-only onboarding (face + body are for the try-on
-    // flow). They go straight to the seller dashboard after register/login.
-    if (user?.role === 'seller') return <Redirect href="/(seller-tabs)/dashboard" />;
+    // Everyone — buyers, sellers, admins — lands on the buyer home by
+    // default. Sellers and admins open the seller dashboard explicitly
+    // from the role-switcher in the top-left menu. This lets one demo
+    // account (and real sellers who also browse) use both sides without
+    // a forced redirect.
     const needsFace = !user?.onboarding?.faceCaptured;
     const needsBody = !user?.onboarding?.bodyProvided;
-    if (needsBody) return <Redirect href="/(onboarding)/body" />;
-    if (needsFace) return <Redirect href="/(onboarding)/face" />;
+    // Seller / admin accounts skip the face/body onboarding (it's a
+    // buyer try-on step). Buyers still get it on their first visit.
+    const isSellerOrAdmin = user?.role === 'seller' || user?.role === 'admin';
+    if (!isSellerOrAdmin) {
+      if (needsBody) return <Redirect href="/(onboarding)/body" />;
+      if (needsFace) return <Redirect href="/(onboarding)/face" />;
+    }
     return <Redirect href="/(tabs)/home" />;
   }
 
