@@ -15,7 +15,6 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
-import sharp from 'sharp';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser, CurrentUserInfo } from '../auth/current-user.decorator';
@@ -153,26 +152,13 @@ export class StyleJobsController {
     for (const sizeKey of Object.keys(files)) {
       const file = files[sizeKey]?.[0];
       if (!file) continue;
-      // Browser already renders a crisp 1500×2000 PNG at a uniform scale.
-      // The only remaining softness comes from the mobile detail page
-      // rendering at ~1200 CSS px × 3× DPR = ~3600 real px, which still
-      // oversamples the image. A SINGLE lanczos3 upscale to a stable
-      // 2000-wide target plus a strong unsharp mask gives perceptibly
-      // crisper edges on hems, zips, logos and hijab wraps without
-      // introducing ringing.
-      let processed: Buffer;
-      try {
-        processed = await sharp(file.buffer, { failOn: 'none' })
-          .resize({ width: 2000, kernel: sharp.kernel.lanczos3, withoutEnlargement: true })
-          .sharpen({ sigma: 1.2, m1: 0.8, m2: 3.0 })
-          .png({ compressionLevel: 7, adaptiveFiltering: true })
-          .toBuffer();
-      } catch {
-        processed = file.buffer;
-      }
+      // Store the browser-side 1500×2000 PNG as-is. Server-side sharp was
+      // tried but the VPS CPU does not support the microarchitecture that
+      // modern sharp binaries require, and the frontend render is already
+      // crisp at this resolution.
       const stored = await this.storage.save(
         `style-results/${id}/${sizeKey}`,
-        processed,
+        file.buffer,
         'image/png',
         `${sizeKey}.png`,
       );
