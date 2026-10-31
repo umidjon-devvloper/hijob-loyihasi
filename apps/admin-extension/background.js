@@ -823,6 +823,42 @@ function buildPrompt(job) {
   }
 }
 
+// ─── Per-body-type prompt narrowing ────────────────────────────────────
+//
+// The shared category builders ask GPT for one 3×3 image. That caps each
+// mannequin at ~340 px native (1024/3), which looks soft on a mobile detail
+// page. To get real quality we fan the job out into THREE 1×3 renders —
+// one per body type — each at ChatGPT's full landscape (~1024 wide ÷ 3 =
+// ~512 px per cell, ≈ 2× the detail). This helper takes the full 3×3
+// prompt and rewrites it in-place to describe just one row.
+const BODY_TYPE_DESC = {
+  slim: 'SLIM — narrow shoulders and waist, overall thin frame',
+  medium: 'MEDIUM — average healthy proportions',
+  full: 'FULL — wider hips, fuller waist, plus-size figure',
+};
+
+function narrowToBodyType(fullPrompt, bodyType) {
+  const desc = BODY_TYPE_DESC[bodyType];
+  if (!desc) return fullPrompt;
+  return fullPrompt
+    .replace(/NINE \(9\)/g, 'THREE (3)')
+    .replace(/all 9 full-body models/g, 'all 3 full-body models')
+    .replace(/all nine/gi, 'all three')
+    .replace(/9 full-body/g, '3 full-body')
+    .replace(/9 cells/g, '3 cells')
+    .replace(/9 pieces/g, '3 pieces')
+    .replace(/9 variants/g, '3 variants')
+    .replace(/3×3 grid \(3 rows × 3 columns\)/g, '1×3 landscape strip (1 row × 3 columns)')
+    .replace(/clean 3×3 grid/g, 'clean 1×3 landscape strip')
+    .replace(
+      /ROWS = body type \(top → bottom\):[\s\S]*?Row 3 — FULL[^\n]*/,
+      `BODY TYPE for this strip (SAME for all 3 cells): ${desc}`,
+    )
+    .replace(/• Leave a VISIBLE EMPTY [a-z]+ HORIZONTAL BAND[^\n]*\n?/g, '')
+    .replace(/between rows 1↔2 and between rows 2↔3/g, '')
+    .replace(/ALL 9 CELLS MUST BE FILLED/g, 'ALL 3 CELLS MUST BE FILLED');
+}
+
 // ─── Per-task runner ───────────────────────────────────────────────────
 
 function skipped(jobId) {
@@ -857,31 +893,47 @@ async function runOne(job) {
 
     // 3. Hand the DRESS request to the content script via a long-lived
     // port. The port keeps the service worker alive for the whole render.
-    // We ask for a 3×3 grid of this hijab on 9 body/height mannequin
-    // variants; the content script slices it before replying.
-    note('✏ GPT ga 3×3 grid yuborilyapti…');
-    const prompt = buildPrompt(job);
+    // We fan the job out into THREE 1×3 strips (one per body type) so
+    // each cell gets GPT's full landscape width — ~512 px native vs the
+    // ~340 px a 3×3 would give. Each strip comes back as 3 slices; we
+    // concatenate them in body-type order and upload the 9 together.
+    const basePrompt = buildPrompt(job);
     const styleRef = await loadStyleReference();
     note(styleRef
       ? `✓ style reference loaded (${Math.round((styleRef.base64.length * 3) / 4 / 1024)} KB)`
       : '⚠ style reference MISSING — attach failed');
-    const resp = await askContentPort(tabId, {
-      type: 'DRESS',
-      prompt,
-      hijabBase64,
-      hijabMime: hijabBlob.type || 'image/jpeg',
-      styleRefBase64: styleRef?.base64 ?? null,
-      styleRefMime: styleRef?.mime ?? null,
-      scene: null,
-      gridKeys: BASE_GRID_KEYS,
-      rows: 3,
-      cols: 3,
-      timeoutMs: DRESS_TIMEOUT_MS,
-    }, DRESS_TIMEOUT_MS + 30_000);
-
-    if (!resp?.ok) throw new Error(resp?.error ?? 'content script failed');
-    const slices = Array.isArray(resp.slices) ? resp.slices : [];
-    if (slices.length !== 9) throw new Error(`expected 9 slices, got ${slices.length}`);
+    const BODY_TYPES = ['slim', 'medium', 'full'];
+    const slices = [];
+    for (const bodyType of BODY_TYPES) {
+      note(`✏ GPT ga ${bodyType} 1×3 strip yuborilyapti…`);
+      if (bodyType !== BODY_TYPES[0]) {
+        // Start each follow-up body-type render in a brand-new chat so the
+        // composer, context and attachments reset cleanly.
+        note('↺ fresh chat for next body type…');
+        await freshChat(tabId);
+      }
+      const prompt = narrowToBodyType(basePrompt, bodyType);
+      const gridKeys = [`${bodyType}-short`, `${bodyType}-mid`, `${bodyType}-tall`];
+      const resp = await askContentPort(tabId, {
+        type: 'DRESS',
+        prompt,
+        hijabBase64,
+        hijabMime: hijabBlob.type || 'image/jpeg',
+        styleRefBase64: styleRef?.base64 ?? null,
+        styleRefMime: styleRef?.mime ?? null,
+        scene: null,
+        gridKeys,
+        rows: 1,
+        cols: 3,
+        timeoutMs: DRESS_TIMEOUT_MS,
+      }, DRESS_TIMEOUT_MS + 30_000);
+      if (!resp?.ok) throw new Error(`${bodyType}: ${resp?.error ?? 'content script failed'}`);
+      const strip = Array.isArray(resp.slices) ? resp.slices : [];
+      if (strip.length !== 3) throw new Error(`${bodyType}: expected 3 slices, got ${strip.length}`);
+      slices.push(...strip);
+      note(`✓ ${bodyType} 3 variant tayyor (jami ${slices.length}/9)`);
+    }
+    if (slices.length !== 9) throw new Error(`expected 9 slices total, got ${slices.length}`);
 
     // 4. Upload all 9 variants in one request. API stores them keyed by
     // sizeKey and sets medium-mid as the fallback resultUrl.
