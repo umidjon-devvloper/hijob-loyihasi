@@ -576,6 +576,9 @@ function buildDressPrompt(job) {
     ? `Dress size: ${job.targetSize} — tailor the fit to this size's silhouette in every cell.`
     : 'Dress size: standard — natural tailored fit in every cell.';
   return [
+    '*** READ BEFORE DRAWING — HARD RULE ***',
+    'If the PRODUCT reference image (attached as image #2) is OUTERWEAR (a jacket, coat, puffer, blazer, bomber, parka, palto, kurtka or plash — anything meant to be worn OVER something), then every model in this image wears that outerwear as a REAL THREE-DIMENSIONAL GARMENT physically pulled onto the body. The jacket has its own thickness and silhouette; its sleeves are FABRIC TUBES wrapping each arm with cuffs at the wrists; it has a visible HEM EDGE where it ends and the beige under-dress continues down to the ankles. NEVER draw the outerwear as a flat PRINT, decal, sticker, graphic, or texture painted onto the dress. If you cannot render the garment as a worn 3D jacket in a given cell, re-draw that cell from scratch.',
+    '',
     'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING THE SAME GARMENT from the attached PRODUCT reference image.',
     '',
     'TWO reference images are attached (in this exact order):',
@@ -714,6 +717,9 @@ function buildOuterwearPrompt(job) {
   const hijabHex = '#e8dcc6';
   const hijabWord = 'soft beige / cream';
   return [
+    '*** READ BEFORE DRAWING — HARD RULE ***',
+    'The PRODUCT in the attached reference image is OUTERWEAR (jacket, coat, palto, puffer, bomber, kurtka). Every model in this image wears it as a REAL THREE-DIMENSIONAL GARMENT physically pulled onto the body. The jacket has its own thickness and silhouette; its sleeves are FABRIC TUBES wrapping each arm with cuffs at the wrists; it has a visible HEM EDGE where it ends and the beige under-dress continues down to the ankles. NEVER draw the outerwear as a flat PRINT, decal, sticker, graphic, or texture painted onto the dress. If you cannot render it as a worn 3D jacket in a given cell, re-draw that cell from scratch.',
+    '',
     'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING THE SAME OUTERWEAR GARMENT (coat / jacket / palto) from the attached reference image OVER a plain modest under-dress.',
     '',
     'The attached reference shows the OUTER garment only (empty / on hanger). Every model in the grid must PHYSICALLY WEAR that exact outer garment as a real three-dimensional jacket pulled onto the body — preserve its colour, material, lining, collar, buttons / zip, cuffs, pocket layout, hem and overall silhouette EXACTLY. Jacket worn OPEN or lightly closed so both lapels / zip and the under-dress neckline are visible, buttoning position consistent across all cells.',
