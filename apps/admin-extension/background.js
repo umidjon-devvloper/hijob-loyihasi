@@ -432,6 +432,8 @@ const GRID_ROWS_COLS = [
 
 const FULL_BODY_SHOT = 'Each cell is a HEAD-TO-TOE full-body shot — the ENTIRE model must be visible from the top of the head all the way DOWN TO THE FEET; feet inside the frame; model centered in her cell.';
 
+const ALL_NINE_CELLS = 'ALL 9 CELLS MUST BE FILLED — every cell contains ONE complete head-to-toe model. NO empty / blank cell, NO half-figure, NO cell where two figures overlap. If you cannot fit all 9, re-plan the grid before drawing so all 9 cells each hold a complete model.';
+
 function gridGutters(chroma) {
   const colorWord = chroma.name.toLowerCase().split(' ').pop();
   return [
@@ -465,7 +467,17 @@ function commonBackground(chroma, garmentWord = 'garment') {
 }
 
 function finalOutput(chroma) {
-  return `Output ONE OPAQUE image (JPEG or PNG without alpha), square or 4:5 portrait, containing all 9 full-body models on the flat ${chroma.name} chroma backdrop arranged in a clean 3×3 grid ready for mechanical cutting. Do NOT use transparency.`;
+  return [
+    `Output ONE OPAQUE image (JPEG or PNG without alpha), square or 4:5 portrait, containing all 9 full-body models on the flat ${chroma.name} chroma backdrop arranged in a clean 3×3 grid ready for mechanical cutting. Do NOT use transparency.`,
+    '',
+    'QUALITY (CRITICAL — the image will be sliced into 9 cells; each cell must look like a crisp standalone product photo, NOT a thumbnail):',
+    '• RENDER AT THE HIGHEST RESOLUTION AVAILABLE — use the LARGEST canvas the model supports (prefer 2048×2048 or larger). Do NOT down-sample; do NOT output a low-res version.',
+    '• Ultra-sharp focus throughout. Every garment edge (hem, sleeve, collar, hijab wrap) must be CRISP and clearly defined — no soft blur, no haze, no painterly smear.',
+    '• Photorealistic high-resolution fashion catalogue photography — the kind of detail you see in Zara, Modanisa, or Net-a-Porter studio shots: visible fabric weave, clean stitching lines, fine folds, defined shoe silhouette.',
+    '• Faces, hands, and feet rendered with correct anatomy and clear skin texture — no plasticky smoothing, no mushy fingers, no fused toes.',
+    '• Fabric colour and texture of the product reproduced faithfully pixel-level — no colour shift, no watercolour smudging, no over-saturation.',
+    '• Even studio lighting, true-colour white balance, no colour cast on the figure.',
+  ].join('\n');
 }
 
 // ─── Category-specific prompts ─────────────────────────────────────────
@@ -508,7 +520,7 @@ function buildScarfPrompt(job) {
     '  • Col 3 — TALL  (~171-185 cm)',
     '',
     `Tying style: ${style}.`,
-    `Primary color accent: ${job.colorHex}.`,
+    'Product colour: TAKE IT FROM THE REFERENCE IMAGE EXACTLY — do not re-tint, do not shift hue, do not substitute.',
     scarfLine,
     '',
     'Each cell is a HEAD-TO-TOE full-body shot — the ENTIRE model must be visible from the top of the head all the way DOWN TO THE FEET; feet inside the frame; model centered in her cell.',
@@ -547,6 +559,14 @@ function buildScarfPrompt(job) {
     '• NO text, NO labels, NO rulers, NO watermarks, NO logos.',
     '',
     `Output ONE OPAQUE image (JPEG or PNG without alpha), square or 4:5 portrait, containing all 9 full-body models on the flat ${chroma.name} chroma backdrop arranged in a clean 3×3 grid ready for mechanical cutting. Do NOT use transparency.`,
+    '',
+    'QUALITY (CRITICAL — the image will be sliced into 9 cells; each cell must look like a crisp standalone product photo, NOT a thumbnail):',
+    '• RENDER AT THE HIGHEST RESOLUTION AVAILABLE — use the LARGEST canvas the model supports (prefer 2048×2048 or larger). Do NOT down-sample; do NOT output a low-res version.',
+    '• Ultra-sharp focus throughout. Every garment edge (hem, sleeve, collar, hijab wrap) must be CRISP and clearly defined — no soft blur, no haze, no painterly smear.',
+    '• Photorealistic high-resolution fashion catalogue photography — the kind of detail you see in Zara, Modanisa, or Net-a-Porter studio shots: visible fabric weave, clean stitching, fine folds, defined shoe silhouette.',
+    '• Faces, hands, and feet rendered with correct anatomy and clear skin texture — no plasticky smoothing, no mushy fingers, no fused toes.',
+    '• Fabric colour and texture of the product reproduced faithfully pixel-level — no colour shift, no watercolour smudging, no over-saturation.',
+    '• Even studio lighting, true-colour white balance, no colour cast on the figure.',
   ].join('\n');
 }
 
@@ -556,17 +576,27 @@ function buildDressPrompt(job) {
     ? `Dress size: ${job.targetSize} — tailor the fit to this size's silhouette in every cell.`
     : 'Dress size: standard — natural tailored fit in every cell.';
   return [
-    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING THE SAME DRESS from the attached dress reference image.',
+    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING THE SAME GARMENT from the attached PRODUCT reference image.',
     '',
     'TWO reference images are attached (in this exact order):',
-    '  (1) STYLE-REFERENCE-copy-this-wrap.png — a model in a navy dress wearing a cream head-and-neck wrap. This is a POSE / SILHOUETTE REFERENCE. COPY the head-and-neck wrap shape from this photo EXACTLY in every one of the 9 cells. The hijab in this reference covers the head and wraps closely around the neck; the ends are tucked behind the shoulders; the front of the dress and the collar are fully visible with NO fabric draping onto the chest. REPRODUCE THIS EXACT SILHOUETTE. Do NOT copy the reference\'s colours, dress or face — only the wrap shape.',
-    '  (2) fabric-swatch-color-only.jpg — colour / pattern / texture reference for the hijab fabric only. Use its colour on the head+neck wrap. DO NOT reshape the fabric into a shawl or chest drape.',
+    '  (1) STYLE-REFERENCE-copy-this-wrap.png — a model in a navy dress wearing a cream head-and-neck wrap. This is a POSE / SILHOUETTE REFERENCE for the HIJAB wrap shape only. COPY the head-and-neck wrap shape from this photo EXACTLY in every one of the 9 cells. The hijab in this reference covers the head and wraps closely around the neck; the ends are tucked behind the shoulders; the front of the dress and the collar are fully visible with NO fabric draping onto the chest. REPRODUCE THIS EXACT HIJAB SILHOUETTE. Do NOT copy the reference\'s colours, dress or face — only the wrap shape.',
+    '  (2) PRODUCT image — the actual garment to showcase. LOOK CAREFULLY at this image and decide what kind of garment it is before drawing:',
+    '      • If it is a DRESS / ABAYA / GOWN / full-length modest garment (one-piece from neckline to ankles): each of the 9 models wears IT as her main outer garment. Preserve its colour, pattern, neckline, sleeves, length and silhouette EXACTLY. No additional outerwear on top.',
+    '      • If it is OUTERWEAR (coat, jacket, palto, puffer, shearling, parka, bomber, blazer, vest, kurtka, plash): each of the 9 models wears a plain SOFT BEIGE / CREAM modest long-sleeve ankle-length UNDER-DRESS (#e8dcc6, NOT white) FIRST, then the OUTERWEAR from the reference OVER the under-dress — worn open or lightly closed so both lapels and the under-dress neckline are visible. Preserve the outerwear\'s colour, lining, collar, closures, cuffs, pockets, hem and silhouette EXACTLY. The under-dress is visible at the neckline above the lapel, at the sleeves beyond the jacket cuffs, and from the jacket hem down to the ankles.',
+    '      • If it is a SKIRT: pair with a plain SOFT BEIGE long-sleeve modest top.',
+    '      • If it is a TOP / BLOUSE / tunic: pair with a plain SOFT BEIGE modest long skirt.',
+    '      Pick ONE classification by looking at the garment and apply it CONSISTENTLY to all 9 cells.',
     '',
-    'STRICT RULE: the final hijab silhouette must match reference (1), with the colour of reference (2). Any variant whose hijab drapes below the collarbone is wrong.',
+    'STRICT RULES:',
+    '  • The final HIJAB silhouette matches reference (1) in shape and the HIJAB colour is a plain soft-beige/cream — the hijab is NOT the hero. Any variant whose hijab drapes below the collarbone is wrong.',
+    '  • The PRODUCT (reference 2) is the hero — reproduced on EVERY model exactly as photographed.',
+    '  • If reference 2 is outerwear, NEVER draw it as a stand-alone dress — the model is always wearing the beige under-dress beneath it.',
+    '',
+    'MANDATORY — ALL 9 CELLS MUST BE FILLED. Every one of the 9 grid cells contains ONE complete head-to-toe model. NO empty cell, NO blank cell, NO duplicate pose in two cells, NO half-figure. If you cannot fit all 9, re-plan the grid so all 9 cells each hold a complete model BEFORE drawing.',
     '',
     ...GRID_ROWS_COLS,
     '',
-    `Primary color accent: ${job.colorHex}.`,
+    'Garment colour: TAKE IT FROM THE PRODUCT REFERENCE IMAGE (reference 2) EXACTLY — do not re-tint, do not shift hue, do not substitute. The seller-selected variant swatch is informational only; the pixels in reference 2 are authoritative.',
     sizeLine,
     '',
     FULL_BODY_SHOT,
@@ -609,7 +639,7 @@ function buildBagPrompt(job) {
     '',
     ...GRID_ROWS_COLS,
     '',
-    `Primary color accent: ${job.colorHex}.`,
+    'Product colour: TAKE IT FROM THE REFERENCE IMAGE EXACTLY — do not re-tint, do not shift hue, do not substitute.',
     '',
     FULL_BODY_SHOT,
     '',
@@ -644,7 +674,7 @@ function buildShoePrompt(job) {
     '',
     ...GRID_ROWS_COLS,
     '',
-    `Primary color accent: ${job.colorHex}.`,
+    'Product colour: TAKE IT FROM THE REFERENCE IMAGE EXACTLY — do not re-tint, do not shift hue, do not substitute.',
     '',
     FULL_BODY_SHOT,
     '• Camera framing in every cell makes BOTH SHOES clearly visible — do not crop at the ankle; include the ground line.',
@@ -671,6 +701,55 @@ function buildShoePrompt(job) {
   ].join('\n');
 }
 
+// Outerwear = palto, kurtka, plash, jacket, coat. The reference image shows
+// the garment flat/empty; the mannequin wears a plain modest BEIGE under-dress
+// and a matching HIJAB underneath, with the outerwear worn OPEN or CLOSED
+// over the top so the full outer garment silhouette reads clearly.
+function buildOuterwearPrompt(job) {
+  const chroma = chromaFor(job.colorHex);
+  // Hijab stays NEUTRAL regardless of the variant colour the seller picked
+  // — the outerwear is the hero and the hijab must not fight it visually.
+  // Garment colour comes from the attached reference pixels, not from the
+  // swatch; see "Garment colour" line below.
+  const hijabHex = '#e8dcc6';
+  const hijabWord = 'soft beige / cream';
+  return [
+    'Ultra-realistic fashion-catalogue composite photo containing NINE (9) full-body modest-fashion young women models, each WEARING THE SAME OUTERWEAR GARMENT (coat / jacket / palto) from the attached reference image OVER a plain modest under-dress.',
+    '',
+    'The attached reference shows the OUTER garment only (empty / on hanger). Every model in the 9-cell grid must WEAR that exact outer garment — preserve its colour, material, lining, collar, buttons / zip, cuffs, pocket layout, hem and overall silhouette EXACTLY. Jacket worn OPEN or lightly closed so both lapels / zip and the under-dress neckline are visible, buttoning position consistent across all 9 cells.',
+    '',
+    ...GRID_ROWS_COLS,
+    '',
+    'Garment colour: TAKE IT FROM THE PRODUCT REFERENCE IMAGE EXACTLY — do not re-tint, do not shift hue, do not substitute. The seller-selected variant swatch is informational only; the pixels in the reference are authoritative.',
+    '',
+    FULL_BODY_SHOT,
+    ALL_NINE_CELLS,
+    '',
+    ...gridGutters(chroma),
+    '',
+    ...COMMON_MODEL_IDENTITY,
+    `• Head covered with a plain neutral ${hijabWord} hijab (${hijabHex}), simple close head-and-neck wrap — covers hair, forehead, ears; passes under the chin; ends tucked BEHIND the shoulders. NO hijab fabric drapes onto the chest or over the outerwear lapels.`,
+    `• UNDER the outerwear: a plain SOFT BEIGE / CREAM long-sleeve ankle-length modest dress (#e8dcc6, NOT white) — visible at the neckline above the lapel, at the sleeves beyond the jacket cuffs (if the jacket is shorter) and from the jacket hem down to the ankles.`,
+    '• Plain BEIGE closed flat shoes on the feet — no bare feet.',
+    '',
+    'Outerwear (every cell — the PRODUCT being showcased):',
+    '• Use the attached reference image as the garment reference — preserve its colour, pattern, fabric texture, collar, closures, sleeves, length and silhouette EXACTLY in every one of the 9 cells.',
+    '• The jacket / coat is worn naturally on the shoulders. Sleeves pulled on fully to the wrists. Hem falls at the length shown in the reference. No creases that hide the main features.',
+    '• Garment is UNOBSTRUCTED by hands or hijab fabric — the camera reads the full outer silhouette front-and-side.',
+    '',
+    'Pose (SAME in every cell — MANDATORY, identical orientation across the whole 9-grid):',
+    "• Body and face BOTH turned slightly to the viewer's RIGHT at a three-quarter angle (~15–20°) so the camera clearly sees the model's RIGHT cheek. NEVER turned to the left, NEVER full-front, NEVER in profile.",
+    '• Full-body standing, feet almost together with weight gently on one leg, shoulders soft, elegant upright posture that shows the outerwear silhouette clearly.',
+    '• Both arms relaxed along the body — NOT crossed in front, NOT holding anything, NOT touching the hijab.',
+    '• Elbows and hands stay close to the body so the whole figure fits inside its own cell and the garment is unobstructed.',
+    '• Soft closed-mouth smile, eyes to camera.',
+    '',
+    ...commonBackground(chroma, 'outerwear'),
+    '',
+    finalOutput(chroma),
+  ].join('\n');
+}
+
 function buildAccessoryPrompt(job) {
   const chroma = chromaFor(job.colorHex);
   return [
@@ -678,7 +757,7 @@ function buildAccessoryPrompt(job) {
     '',
     ...GRID_ROWS_COLS,
     '',
-    `Primary color accent: ${job.colorHex}.`,
+    'Product colour: TAKE IT FROM THE REFERENCE IMAGE EXACTLY — do not re-tint, do not shift hue, do not substitute.',
     '',
     FULL_BODY_SHOT,
     '',
@@ -714,8 +793,26 @@ function buildAccessoryPrompt(job) {
 // Dispatcher — picks the right category prompt from product.categoryId.
 // Falls back to scarves (the historical default) when the field is missing
 // so old queued jobs keep rendering with the same prompt they would have.
+//
+// Outerwear detection: the backend has no "outerwear" category today, so
+// coats/jackets land in "dresses" and the dress prompt tries to put the
+// model into the jacket as if it were a gown. Sniff title keywords (uz/ru/en)
+// and route those jobs to the outerwear prompt instead.
+const OUTERWEAR_RE = /\b(palto|kurtka|plash|parka|bomber|jacket|coat|puffer|shuba|dublyonka|дублёнк|дубленк|пуховик|куртк|пальто|плащ|пардес|жилет|жилетка|vest)\b/i;
+
+function looksLikeOuterwear(job) {
+  const t = [job.product?.titleRu, job.product?.titleUz, job.product?.title]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return OUTERWEAR_RE.test(t);
+}
+
 function buildPrompt(job) {
   const category = job.product?.categoryId;
+  if ((category === 'dresses' || category === 'accessories') && looksLikeOuterwear(job)) {
+    return buildOuterwearPrompt(job);
+  }
   switch (category) {
     case 'dresses':     return buildDressPrompt(job);
     case 'bags':        return buildBagPrompt(job);

@@ -241,15 +241,89 @@
       }
     }
 
-    // Plain-slice path: GPT puts the figure wherever it wants inside a
-    // cell (often off-center with a black band on the opposite side).
-    // We re-measure the figure's actual horizontal extent inside each
-    // slice and shift it so it sits dead-centre in its own cell. We also
-    // sample the cell's own background colour (not the grid-wide one) in
-    // case GPT drew different cells on slightly different shades.
-    return cells.map((c) =>
-      canvasToSlice(c.sizeKey, centerFigureInCell(c.cell), 'image/png'),
+    // Uniform-scale path: key out backdrop on every cell, measure the
+    // opaque bbox of each resulting figure, then draw EVERY figure into
+    // its own 900×1200 canvas at the SAME scale (based on the tallest
+    // figure in the grid). This keeps slim↔full and short↔tall
+    // proportions comparable across the 9 variants, and does exactly one
+    // resample step from native cell pixels → final canvas so quality
+    // survives. The old centerFigureInCell path tight-cropped each cell
+    // and rescaled it independently, which both broke proportions and
+    // added an extra resample pass that softened detail.
+    return uniformSliceCells(cells, bg);
+  }
+
+  function uniformSliceCells(cells, gridBg) {
+    const keyed = cells.map((c) => {
+      const cellBg = gridBg || sampleBackground(
+        c.cell.getContext('2d', { willReadFrequently: true })
+          .getImageData(0, 0, c.cell.width, c.cell.height).data,
+        c.cell.width, c.cell.height,
+      );
+      const box = { x0: 0, y0: 0, x1: c.cell.width, y1: c.cell.height };
+      return { sizeKey: c.sizeKey, canvas: keyOut(c.cell, box, cellBg) };
+    });
+    const bboxes = keyed.map((k) => opaqueBbox(k.canvas));
+    // Guard against a cell where keyOut returned nothing opaque.
+    const validHs = bboxes.filter((b) => b.h > 0).map((b) => b.h);
+    const validWs = bboxes.filter((b) => b.w > 0).map((b) => b.w);
+    if (!validHs.length || !validWs.length) {
+      return cells.map((c) =>
+        canvasToSlice(c.sizeKey, centerFigureInCell(c.cell), 'image/png'),
+      );
+    }
+    const maxH = Math.max(...validHs);
+    const maxW = Math.max(...validWs);
+    const scale = Math.min(
+      (CELL_OUT_H * 0.90) / maxH,
+      (CELL_OUT_W * 0.88) / maxW,
     );
+    return keyed.map((k, i) =>
+      canvasToSlice(k.sizeKey, drawUniform(k.canvas, bboxes[i], scale), 'image/png'),
+    );
+  }
+
+  // Tight opaque bounding box inside a transparent canvas.
+  function opaqueBbox(canvas) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let d;
+    try { d = ctx.getImageData(0, 0, w, h).data; } catch { return { x: 0, y: 0, w, h }; }
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    const ALPHA_MIN = 32;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (d[(y * w + x) * 4 + 3] >= ALPHA_MIN) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 < 0) return { x: 0, y: 0, w: 0, h: 0 };
+    return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+
+  // Draw the transparent figure into a fixed 900×1200 canvas at the given
+  // scale: horizontally centered on the figure's own center-of-mass column,
+  // and vertically positioned so the feet sit ~96% down the frame (same
+  // floor line for every variant, so short/mid/tall differences stay visible).
+  function drawUniform(figCanvas, bbox, scale) {
+    const out = document.createElement('canvas');
+    out.width = CELL_OUT_W;
+    out.height = CELL_OUT_H;
+    const octx = out.getContext('2d');
+    if (!octx || bbox.w === 0) return out;
+    octx.imageSmoothingQuality = 'high';
+    const dw = bbox.w * scale;
+    const dh = bbox.h * scale;
+    const destX = (CELL_OUT_W - dw) / 2;
+    const floorY = CELL_OUT_H * 0.96;
+    const destY = floorY - dh;
+    octx.drawImage(figCanvas, bbox.x, bbox.y, bbox.w, bbox.h, destX, destY, dw, dh);
+    return out;
   }
 
   // Find the main figure in the cell (ignoring stray feet / hijab tops
@@ -262,8 +336,16 @@
   // and the top of the head or the feet get silently dropped out of the
   // bbox and chopped off in the final crop.
   const CELL_FG_DIST = 20;  // |ΔR|+|ΔG|+|ΔB| threshold vs. sampled bg
-  const CELL_OUT_W = 600;
-  const CELL_OUT_H = 800;
+  // Higher-res output per cell — sharper detail retention for product
+  // detail page where the image is displayed at close to full width.
+  // Final canvas resolution per cell. Bumped from 900×1200 → 1500×2000 so
+  // the mobile detail page (shown at ~1200 px on a 3x retina phone) is no
+  // longer silently upscaled by the OS image viewer. GPT's native cell is
+  // ~340 px wide, so this is still a ~4× upsample at drawImage time, but
+  // the browser's bicubic resampler is far better than the phone's and
+  // the resulting PNG is far crisper on the product page.
+  const CELL_OUT_W = 1500;
+  const CELL_OUT_H = 2000;
 
   function centerFigureInCell(cell) {
     const w = cell.width;
@@ -527,13 +609,54 @@
     const n = w * h;
     const greenKey = bg[1] > bg[0] + 40 && bg[1] > bg[2] + 40;
     const magentaKey = bg[0] > bg[1] + 40 && bg[2] > bg[1] + 40;
+    // GPT sometimes ignores the "flat solid chroma" instruction and draws a
+    // very dark backdrop (near black with coloured noise sprinkled on it).
+    // Detect that so we can key more aggressively and sweep the noise out —
+    // otherwise semi-transparent speckles leak into the final PNG and show
+    // up as green/colored dots around the figure on the mobile preview.
+    const bgSum = bg[0] + bg[1] + bg[2];
+    const darkKey = !greenKey && !magentaKey && bgSum < 80;
+    // Dark backdrops: widen the ramp so faint colored noise (sum-dist 60–180
+    // from near-black bg) falls below full opacity and can be flood-killed.
+    const keyLo = darkKey ? 30 : KEY_LO;
+    const keyHi = darkKey ? 220 : KEY_HI;
+
+    // Pre-filter: any pixel still clearly in the chroma colour (even if the
+    // ramp would hold onto it as an edge) gets snapped to the background —
+    // otherwise semi-transparent chroma pixels leak around every figure
+    // after keying, showing up as a yashil halo on the admin preview.
+    for (let p = 0; p < n; p++) {
+      const i = p * 4;
+      if (greenKey) {
+        if (d[i + 1] > d[i] + 20 && d[i + 1] > d[i + 2] + 15 && d[i + 1] > 110) {
+          d[i] = bg[0]; d[i + 1] = bg[1]; d[i + 2] = bg[2];
+        }
+      } else if (magentaKey) {
+        if (d[i] > d[i + 1] + 20 && d[i + 2] > d[i + 1] + 20 && d[i] > 110 && d[i + 2] > 110) {
+          d[i] = bg[0]; d[i + 1] = bg[1]; d[i + 2] = bg[2];
+        }
+      } else if (darkKey) {
+        // Only snap pixels that are both DARK and CLOSE to the backdrop
+        // colour. The old rule snapped on brightness alone, which stripped
+        // dark hijabs and dark dress fabric straight off the figure. We
+        // need colour-distance here so black fabric (far from dark-but-
+        // tinted speckle) survives.
+        const dr = d[i] - bg[0];
+        const dg = d[i + 1] - bg[1];
+        const db = d[i + 2] - bg[2];
+        const colDist = Math.abs(dr) + Math.abs(dg) + Math.abs(db);
+        if (colDist <= 36 && d[i] + d[i + 1] + d[i + 2] <= 120) {
+          d[i] = bg[0]; d[i + 1] = bg[1]; d[i + 2] = bg[2];
+        }
+      }
+    }
 
     // Raw key alpha per pixel.
     const alpha = new Float32Array(n);
     for (let p = 0; p < n; p++) {
       const i = p * 4;
       const dist = Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]);
-      alpha[p] = Math.min(1, Math.max(0, (dist - KEY_LO) / (KEY_HI - KEY_LO)));
+      alpha[p] = Math.min(1, Math.max(0, (dist - keyLo) / (keyHi - keyLo)));
     }
 
     // On a dark backdrop only pixels connected to the box edge count, so
@@ -572,10 +695,58 @@
     const chromaKey = greenKey || magentaKey;
     for (let p = 0; p < n; p++) {
       if (!reached[p] && !(chromaKey && alpha[p] < 0.5)) alpha[p] = 1;
+      // Hard-snap any backdrop-connected soft pixel to zero. Without this,
+      // speckle noise sitting at alpha 0.1–0.5 survives the composite and
+      // shows up as faint coloured dots around the figure in the final PNG.
+      else if (reached[p] && alpha[p] < 0.6) alpha[p] = 0;
     }
 
-    // 1px choke: drop the thin halo of backdrop-tinted edge pixels.
-    const choked = new Float32Array(n);
+    // Keep only the LARGEST solid foreground island plus any island at
+    // least 20 % of its size. GPT sometimes bleeds a chin or hijab tip
+    // from the neighbour row into this cell — stray enclosed by backdrop
+    // (not touching our edges) survived the flood-fill above and was
+    // forced opaque. Those are always much smaller than the real figure.
+    {
+      const label = new Int32Array(n);
+      const sizes = [0]; // index 0 unused
+      let bestSize = 0;
+      let bestId = 0;
+      const q = new Int32Array(n);
+      for (let p = 0; p < n; p++) {
+        if (label[p] || alpha[p] < 1) continue;
+        const id = sizes.length;
+        label[p] = id;
+        let qh = 0;
+        let qt = 0;
+        q[qt++] = p;
+        let size = 0;
+        while (qh < qt) {
+          const r = q[qh++];
+          size++;
+          const rx = r % w;
+          if (rx > 0 && !label[r - 1] && alpha[r - 1] >= 1) { label[r - 1] = id; q[qt++] = r - 1; }
+          if (rx < w - 1 && !label[r + 1] && alpha[r + 1] >= 1) { label[r + 1] = id; q[qt++] = r + 1; }
+          if (r >= w && !label[r - w] && alpha[r - w] >= 1) { label[r - w] = id; q[qt++] = r - w; }
+          if (r < n - w && !label[r + w] && alpha[r + w] >= 1) { label[r + w] = id; q[qt++] = r + w; }
+        }
+        sizes.push(size);
+        if (size > bestSize) { bestSize = size; bestId = id; }
+      }
+      // Keep anything at least 8 % of the main figure. A hijab head or a
+      // sleeve may become its own island after keying — those must survive;
+      // only clearly-tiny strays (chin peek, speckle) get dropped.
+      const minKeep = Math.max(400, Math.round(bestSize * 0.08));
+      for (let p = 0; p < n; p++) {
+        const id = label[p];
+        if (id && id !== bestId && sizes[id] < minKeep) alpha[p] = 0;
+      }
+    }
+
+    // 2px choke: drop the thin halo of backdrop-tinted edge pixels. One
+    // pixel wasn't enough when GPT drew figures with soft chroma AA — the
+    // extra pass removes those sub-pixel green rings around hems and
+    // hijab edges.
+    let choked = new Float32Array(n);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         let m = alpha[y * w + x];
@@ -591,6 +762,22 @@
         }
         choked[y * w + x] = m;
       }
+    }
+    // Alpha hardening: push every soft edge to either fully-opaque or
+    // fully-transparent with a very narrow (1-px) anti-alias band in
+    // between. The old 2-pass choke left a 2–3 px soft gradient at every
+    // hem, hijab and sleeve edge that read as "xira" (blurry) on the
+    // mobile preview after upscale. A steeper sigmoid gives crisp edges
+    // without the ladder-step aliasing of a hard binary alpha.
+    for (let p = 0; p < n; p++) {
+      const a = choked[p];
+      if (a <= 0) continue;
+      if (a >= 1) continue;
+      // Below 0.35 → gone, above 0.75 → solid, in between → steep ramp
+      // mapped back to [0, 1].
+      if (a < 0.35) choked[p] = 0;
+      else if (a > 0.75) choked[p] = 1;
+      else choked[p] = (a - 0.35) / 0.40;
     }
 
     for (let p = 0; p < n; p++) {
@@ -657,12 +844,15 @@
     return { sizeKey, base64: commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl, mime };
   }
 
-  // [start, end] of the heaviest run of non-empty lines. Gaps up to 2% of
+  // [start, end] of the heaviest run of non-empty lines. Gaps up to 0.5% of
   // the length are bridged so a thin dark seam inside the figure (e.g.
-  // between hem and shoes) doesn't split it.
+  // between hem and shoes) doesn't split it. Keeping the gap tight is
+  // important: a stray neighbour-cell head sitting ~20px below the main
+  // figure's feet must NOT get bridged into the main band or it ends up
+  // dangling under the shoes in the final crop.
   function mainBand(prof) {
     const len = prof.length;
-    const maxGap = Math.max(4, Math.round(len * 0.02));
+    const maxGap = Math.max(2, Math.round(len * 0.005));
     const minLine = 2;
     let best = null;
     let cur = null;

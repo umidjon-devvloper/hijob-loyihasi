@@ -244,7 +244,7 @@ export default function AddProductScreen() {
           colorHex: v.colorHex,
           size: v.size.trim(),
           stock: Number(v.stock || 0),
-          sku: (v.sku.trim() || `${slugify(titleRu)}-${v.size}-${i + 1}`).toUpperCase(),
+          sku: (v.sku.trim() || `${slugify(titleRu)}-${v.size}-${i + 1}-${Math.random().toString(36).slice(2, 7)}`).toUpperCase(),
           priceUsd: v.priceUsd ? Number(v.priceUsd) : undefined,
           images: v.images.length ? v.images : undefined,
         })),
